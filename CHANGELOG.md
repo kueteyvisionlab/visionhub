@@ -1,0 +1,274 @@
+# Changelog — Vision CRM
+
+Toutes les modifications notables du projet sont documentées ici.
+Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
+
+---
+
+## [0.8.0] — 2026-02-19
+
+### Description
+Pages de détail et formulaires interactifs. L'application CRM devient navigable et fonctionnelle.
+
+### Ajouté
+
+#### Pages de détail (3 pages dynamiques)
+- **Contact** (`/contacts/[id]`) — Fiche contact complète avec avatar, infos, tags, timeline 8 événements, deals associés, devis, notes
+- **Deal** (`/deals/[id]`) — Barre de progression étapes, 4 KPIs (montant/probabilité/score/jours), description, timeline activité, documents liés
+- **Devis** (`/orders/[id]`) — Aperçu document style facture (en-tête entreprise, tableau lignes, sous-total/TVA/TTC), actions, deal associé
+
+#### Formulaires interactifs
+- **Contacts** — Page rendue interactive ('use client'), modal création contact 7 champs, recherche client-side, filtre par type
+- **Nouveau contact** — Form avec validation, loading state, message succès
+
+### Stats
+- 18 pages Next.js (15 statiques + 3 dynamiques)
+- 34 fichiers frontend, 54 fichiers backend
+- **89 fichiers source** total
+
+---
+
+## [0.7.0] — 2026-02-19
+
+### Description
+Ajout des pages Email Marketing et Calendrier, plus une bibliothèque de composants UI réutilisables.
+
+### Ajouté
+
+#### Pages Dashboard (2 pages)
+- **Email Marketing** (`/emails`) — Stats (envois, ouvertures, clics), table 6 campagnes démo, grille 4 templates avec aperçu
+- **Calendrier** (`/calendar`) — Vue semaine avec grille horaire 08h-18h, 8 événements positionnés, prochains RDV
+
+#### Composants UI réutilisables (6 fichiers)
+- **Button** — 5 variantes (primary/secondary/outline/danger/ghost), 3 tailles, loading state, support href
+- **Badge** — 7 variantes colorées (brand/emerald/amber/rose/violet/surface/default)
+- **Modal** — Overlay, fermeture Escape/click-outside, 4 tailles, scroll lock
+- **Card** — Container avec CardHeader, CardTitle, CardDescription
+- **EmptyState** — État vide avec icône, titre, description, action
+- **Barrel export** (`ui/index.ts`) — Import centralisé
+
+### Stats
+- 17 pages Next.js (build statique OK)
+- 31 fichiers frontend, 54 fichiers backend, 1 SQL
+- **86 fichiers source** total
+
+---
+
+## [0.6.0] — 2026-02-19
+
+### Description
+Connexion frontend-backend : authentification Supabase côté client, API client, middleware de protection des routes, et pages dashboard supplémentaires.
+
+### Ajouté
+
+#### Infrastructure Auth & API (4 fichiers)
+- **AuthContext** (`contexts/AuthContext.tsx`) — Provider React avec session Supabase, onAuthStateChange, signOut, hook useAuth()
+- **API Client** (`lib/api.ts`) — Utilitaire fetch typé avec helpers apiGet/apiPost/apiPatch/apiDelete, gestion token Bearer
+- **Middleware** (`middleware.ts`) — Protection routes : redirect `/login` si non auth, redirect `/dashboard` si déjà auth
+- **Dashboard layout** mis à jour avec AuthProvider
+
+#### Pages Dashboard supplémentaires (3 pages)
+- **Analytiques** (`/analytics`) — KPIs trimestriels, graphique CA 6 mois, top 5 clients, entonnoir de conversion
+- **Devis & Factures** (`/orders`) — Table 8 documents démo, stats, filtres type/statut, badges colorés
+- **Paramètres** (`/settings`) — 4 sections : Profil, Entreprise, Notifications, Sécurité
+
+### Stats
+- 15 pages Next.js (build statique OK)
+- 23 fichiers frontend TSX/TS
+- Middleware actif (26.7 kB)
+- 32 tests backend passants
+
+---
+
+## [0.5.0] — 2026-02-19
+
+### Description
+Ajout de l'application CRM frontend : pages d'authentification, dashboard avec KPIs, liste contacts et pipeline Kanban.
+
+### Ajouté
+
+#### Restructuration Frontend
+- **Route groups** — `(marketing)` pour le site vitrine, `(auth)` pour l'authentification, `(dashboard)` pour l'app CRM
+- **Root layout** simplifié (fonts + html/body uniquement)
+- **Marketing layout** avec Header + Footer (site vitrine existant)
+- **Supabase client** (`lib/supabase.ts`) pour le frontend
+
+#### Pages d'authentification (3 pages)
+- **Login** (`/login`) — Email + mot de passe, appel Supabase Auth, redirection dashboard
+- **Register** (`/register`) — Nom, email, mot de passe, nom d'entreprise, confirmation email
+- **Forgot Password** (`/forgot-password`) — Reset par email via Supabase Auth
+- Design centré, responsive, couleurs brand
+
+#### Dashboard CRM (4 fichiers)
+- **Layout** — Sidebar navigation (surface-900) + topbar avec recherche
+- **Sidebar** (`components/Sidebar.tsx`) — Navigation avec icônes SVG, active state via usePathname
+- **Dashboard** (`/dashboard`) — 4 KPI cards (contacts, deals, devis, CA), activité récente, mini pipeline
+- **Contacts** (`/contacts`) — Table avec 8 contacts démo, badges score (hot/warm/cold), filtres, pagination
+- **Deals** (`/deals`) — Vue Kanban 4 colonnes (Qualification, Proposition, Négociation, Gagné) avec deal cards
+
+### Stats
+- 12 pages Next.js (build statique OK)
+- 17 fichiers frontend TSX/TS
+- 0 erreurs build
+
+---
+
+## [0.4.0] — 2026-02-19
+
+### Description
+Ajout de l'infrastructure de tests avec Vitest. Refactoring app/server pour testabilité.
+
+### Ajouté
+
+#### Tests (5 fichiers, 32 tests)
+- **Vitest config** (`vitest.config.ts`) — Configuration test runner Node.js
+- **sanitize.test.ts** — 9 tests : null/undefined, primitives, troncature, redaction clés sensibles, nested, arrays, immutabilité
+- **pagination.test.ts** — 11 tests : defaults, parsing, clamping, floor, offset, buildPaginationMeta
+- **errorHandler.test.ts** — 5 tests : AppError class (statusCode, message, code, isOperational, stack)
+- **scoring.service.test.ts** — 3 tests : getScoreLabel (hot/warm/cold)
+- **api.test.ts** — 4 tests d'intégration : health 200, 404 catch-all, auth 401 contacts, auth 401 deals
+
+#### Refactoring
+- **Séparation app/server** — `index.ts` exporte l'app Express (testable), `server.ts` démarre le serveur + scheduler
+- Scripts npm mis à jour : `dev` → `server.ts`, `start` → `server.js`
+
+### Commandes
+- `npm run test --workspace=backend` — Lancer les 32 tests
+- `npm run test:watch --workspace=backend` — Mode watch
+- `npm run test:coverage --workspace=backend` — Avec couverture
+
+---
+
+## [0.3.0] — 2026-02-19
+
+### Description
+Ajout du système de cron jobs automatisés et du système d'audit logs pour la traçabilité des actions.
+
+### Ajouté
+
+#### Cron Jobs (6 fichiers)
+- **Scheduler** (`jobs/index.ts`) — Orchestrateur avec start/stop, graceful shutdown (SIGINT/SIGTERM)
+- **Scoring Job** — Recalcul quotidien lead scoring AI à 02:00 UTC pour tous les tenants actifs
+- **Reminders Job** — Vérification horaire des rappels automatiques (once/daily/weekly/monthly/yearly/interval)
+- **Stagnant Deals Job** — Détection toutes les 6h des deals stagnants (>14j sans update), alerte système
+- **Webhook Retry Job** — Retry toutes les 15min des webhooks échoués (max 3 tentatives, fenêtre 72h)
+- **Usage Reset Job** — Remise à zéro des compteurs d'usage le 1er de chaque mois
+
+#### Système d'Audit Logs (3 fichiers)
+- **Middleware `auditLog`** — Intercept POST/PATCH/PUT/DELETE, log fire-and-forget dans `audit_logs`
+- **Sanitize utility** — Nettoyage données sensibles (passwords, tokens, secrets → [REDACTED])
+- **AuditService** — Requêtes audit avec filtres (user, action, resource, date range) + résumé activité 24h
+
+#### Améliorations serveur
+- Graceful shutdown (SIGINT/SIGTERM) avec arrêt propre du scheduler
+- Import scheduler dans `index.ts`, démarrage auto après listen
+
+---
+
+## [0.2.0] — 2026-02-19
+
+### Description
+Ajout de la couche services (business logic), des intégrations tierces, et du seed data de développement.
+
+### Ajouté
+
+#### Services Business Logic (4 fichiers)
+- **ScoringService** — Algorithme lead scoring AI (5 facteurs, score 0-100, hot/warm/cold)
+- **NotificationService** — Notifications automatiques (commandes, deals, rappels, deals stagnants)
+- **BillingService** — Gestion abonnements Stripe (checkout, webhooks, usage, limites par plan)
+- **WebhookService** — Dispatch webhooks sortants (HMAC-SHA256 signature, retry failed)
+
+#### Intégrations Tierces (4 fichiers)
+- **StripeService** — Paiements (customers, checkout, portal, subscriptions) avec mode dev mock
+- **BrevoService** — Email marketing (transactional, campaigns, contacts sync) avec mode dev mock
+- **TwilioService** — SMS & WhatsApp (send, bulk, status check, format FR) avec mode dev mock
+- **BridgeService** — Open Banking (connect, accounts, transactions, sync) avec mode dev mock
+
+#### Seed Data
+- Script `seed.ts` (54KB) avec données réalistes de démo
+- 2 tenants : Garage Dupont (pro) + Hôtel Le Parisien (starter)
+- 5 users, 18 contacts, 14 entities, 10 orders avec items
+- Pipelines avec stages, deals, service orders, templates email
+- Tags, notes, rappels automatiques, avis clients
+- Commande : `npm run seed --workspace=backend`
+
+### Corrigé
+- Fix TypeScript : casting `response.json() as any` pour les services HTTP
+- Fix import Stripe conditionnel (SDK optionnel)
+- Fix marketplace.ts : `req: any` pour compatibilité Express types
+
+---
+
+## [0.1.0] — 2026-02-18
+
+### Description
+Initialisation complète du projet Vision CRM multi-métiers. Mise en place de l'architecture monorepo, du backend API, du schéma de base de données complet, et du site vitrine marketing.
+
+### Ajouté
+
+#### Structure projet
+- Monorepo npm workspaces (`backend/` + `frontend/`)
+- Configuration TypeScript strict pour backend
+- ESLint + Prettier config
+- `.env.example` documenté avec toutes les variables
+- `CLAUDE.md` avec conventions projet
+- `.gitignore` complet
+
+#### Backend API (Express + TypeScript)
+- Configuration Supabase client (anon + admin)
+- Système d'authentification JWT via Supabase Auth
+- Middleware RBAC (`requireRole`) pour 4 rôles
+- Middleware isolation tenant (tenant_id scoping)
+- Rate limiting par plan (Free: 100/h, Pro: 5000/h)
+- Validation Zod centralisée
+- Error handler global structuré
+- Logger avec timestamps
+- Pagination helper (page, limit, offset)
+- **18 fichiers de routes API** couvrant :
+  - Auth (register, login, refresh, me)
+  - Tenants (CRUD, stats, modules)
+  - Users (CRUD, RBAC)
+  - Contacts (CRUD, timeline, tags, search)
+  - Entities (CRUD multi-type : vehicle, room, patient, etc.)
+  - Orders (CRUD, send, accept, reject, pay, PDF)
+  - Service Orders (CRUD, status workflow, calendar)
+  - Pipelines (CRUD, stages, reorder)
+  - Deals (CRUD, move stage, score, forecast)
+  - Email Marketing (templates, campaigns, sequences, Brevo webhooks)
+  - Analytics (KPIs, reports, exports, revenue)
+  - Web Forms (CRUD, public submit, lead routing)
+  - SMS/WhatsApp (templates, campaigns, one-shot, conversations)
+  - Banking (connections, transactions, reconciliation, treasury)
+  - Webhooks (CRUD, deliveries, test)
+  - Client Portal (magic link, dashboard, messages, quote requests)
+  - Reports (saved, scheduled)
+
+#### Base de données (PostgreSQL / Supabase)
+- Migration initiale avec ~50 tables
+- 25+ enums PostgreSQL
+- RLS policies sur toutes les tables tenant-scoped
+- Indexes de performance (schedules, search, etc.)
+- Trigger `update_updated_at()` automatique
+- Tables couvrant : Core, Entities, Services, Pipeline/Deals, Email, SMS, Forms, Banking, API/Webhooks, Analytics, Portal
+
+#### Frontend Site Vitrine (Next.js 14)
+- Setup Next.js 14 App Router + Tailwind CSS
+- Design system Vision CRM (brand colors, typography)
+- **Page Accueil** : Hero, 9 métiers, 6 features, How it works, Metrics, CTA
+- **Page Tarifs** : 4 plans (Free/Starter/Pro/Enterprise) + add-ons + FAQ
+- **Page Fonctionnalités** : 6 catégories détaillées
+- Header responsive avec navigation + mobile menu
+- Footer 4 colonnes avec liens
+- SEO metadata sur toutes les pages
+- Contenu 100% français
+
+### Notes techniques
+- Stack conforme au PRD v3.0 (Février 2026)
+- Feature parity 95% HubSpot, 100% Pipedrive pour PME
+- Budget infra cible : ~275€/mois
+- 9 modules métiers supportés
+- Architecture Core + Modules extensible
+
+---
+
+*Prochain : Phase 2 — Intégrations tierces (Stripe, Bridge, Brevo, Twilio)*
