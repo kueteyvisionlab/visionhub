@@ -4,6 +4,7 @@ import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { apiPost } from '@/lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,14 +19,29 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      // Call backend API to get user + tenant + session
+      const { data, error: apiError } = await apiPost<{
+        user: any;
+        tenant: any;
+        session: { access_token: string; refresh_token: string; expires_at: number };
+      }>('/auth/login', { email, password });
 
-      if (signInError) {
-        setError(signInError.message);
-        return;
+      if (apiError || !data) {
+        // Fallback: try direct Supabase auth if backend is unavailable
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (signInError) {
+          setError(apiError || signInError.message);
+          return;
+        }
+      } else {
+        // Set Supabase session with tokens from backend
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
       }
 
       router.push('/dashboard');

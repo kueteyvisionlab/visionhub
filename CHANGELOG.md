@@ -5,6 +5,53 @@ Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
 ---
 
+## [1.3.0] — 2026-02-20
+
+### Description
+Interface responsive mobile, panneau notifications, menu utilisateur dropdown, et améliorations UX.
+
+### Ajouté
+- **Sidebar responsive** — Menu hamburger sur mobile/tablette, overlay sombre, fermeture auto sur navigation
+- **Panneau notifications** — Dropdown clochette avec notifications (API avec fallback démo), indicateur non-lues
+- **Menu utilisateur** — Dropdown avatar avec liens Profil/Paramètres et bouton Déconnexion
+- **Bouton fermer sidebar** (mobile) — Croix dans l'en-tête sidebar sur écrans < lg
+
+### Modifié
+- **Dashboard layout** — Entièrement refactorisé : responsive (mobile/tablette/desktop), topbar adaptive, recherche icône mobile + barre desktop
+- **Sidebar** — N'est plus `fixed` directement, positionnée par le layout parent avec transitions CSS. Accepte prop `onClose`.
+- **Padding responsive** — `p-4 sm:p-6` au lieu de `p-6` fixe
+
+### Stats
+- **17 pages** Next.js (build OK)
+- **12 pages** connectées à l'API réelle
+- **32 tests** backend passants
+
+---
+
+## [1.2.0] — 2026-02-20
+
+### Description
+Auth flow complet via API backend, recherche globale Ctrl+K, toast notifications, correction navigation sidebar.
+
+### Ajouté
+- **Recherche globale** (`Ctrl+K`) — Recherche instantanée contacts, deals, documents avec navigation clavier
+- **Toast notifications** (`ToastProvider`) — Système de notifications toast (success/error/info) avec animation slide-up
+- **Champ téléphone** sur la page d'inscription
+
+### Modifié
+- **Register** (`/register`) — Appelle désormais l'API backend `/auth/register` (crée tenant + user + session) au lieu de Supabase direct. Auto-génère le slug tenant. Redirige vers `/dashboard` après inscription.
+- **Login** (`/login`) — Appelle l'API backend `/auth/login` avec fallback Supabase direct. Récupère user + tenant + tokens.
+- **Sidebar** — Correction des URLs (étaient en français, maintenant correspondent aux routes réelles : `/orders`, `/calendar`, `/analytics`, `/settings`). Affiche nom/email réel de l'utilisateur connecté.
+- **Dashboard layout** — Barre de recherche remplacée par le trigger recherche globale avec hint `Ctrl+K`
+
+### Stats
+- **17 pages** Next.js (build OK)
+- **12 pages** connectées à l'API réelle
+- **32 tests** backend passants
+- **0 pages** avec données uniquement hardcodées
+
+---
+
 ## [1.1.0] — 2026-02-20
 
 ### Description

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface NavItem {
   href: string;
@@ -38,7 +39,7 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    href: '/devis-factures',
+    href: '/orders',
     label: 'Devis & Factures',
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -56,7 +57,7 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    href: '/calendrier',
+    href: '/calendar',
     label: 'Calendrier',
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -65,7 +66,7 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    href: '/analytiques',
+    href: '/analytics',
     label: 'Analytiques',
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -74,7 +75,7 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    href: '/parametres',
+    href: '/settings',
     label: 'Paramètres',
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -85,19 +86,38 @@ const navItems: NavItem[] = [
   },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
+  const { user } = useAuth();
+
+  const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Utilisateur';
+  const userEmail = user?.email || '';
+  const userInitials = userName
+    .split(' ')
+    .map((n: string) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
 
   return (
-    <aside className="w-64 bg-surface-900 text-white flex flex-col h-screen fixed left-0 top-0">
+    <aside className="w-64 bg-surface-900 text-white flex flex-col h-screen">
       {/* Logo */}
-      <div className="px-6 py-5 flex items-center gap-3">
-        <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center">
-          <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 2L2 7l10 5 10-5-10-5ZM2 17l10 5 10-5M2 12l10 5 10-5" />
-          </svg>
+      <div className="px-6 py-5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center">
+            <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2L2 7l10 5 10-5-10-5ZM2 17l10 5 10-5M2 12l10 5 10-5" />
+            </svg>
+          </div>
+          <span className="text-xl font-bold text-white">Vision CRM</span>
         </div>
-        <span className="text-xl font-bold text-white">Vision CRM</span>
+        {onClose && (
+          <button onClick={onClose} className="lg:hidden p-1 rounded hover:bg-surface-800 transition-colors">
+            <svg className="w-5 h-5 text-surface-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Navigation */}
@@ -110,6 +130,7 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onClose}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 isActive
                   ? 'bg-brand-500/20 text-brand-400'
@@ -127,11 +148,11 @@ export default function Sidebar() {
       <div className="px-4 py-4 border-t border-surface-800">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-full bg-brand-500 flex items-center justify-center text-sm font-semibold">
-            AD
+            {userInitials}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">Admin</p>
-            <p className="text-xs text-surface-200 truncate">admin@vision-crm.fr</p>
+            <p className="text-sm font-medium text-white truncate">{userName}</p>
+            <p className="text-xs text-surface-200 truncate">{userEmail}</p>
           </div>
           <svg className="w-4 h-4 text-surface-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 15 12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" />

@@ -1,17 +1,30 @@
 'use client';
 
 import { useState, FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { apiPost } from '@/lib/api';
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 100);
+}
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [companyName, setCompanyName] = useState('');
+  const [phone, setPhone] = useState('');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
@@ -23,60 +36,53 @@ export default function RegisterPage() {
       return;
     }
 
-    if (password.length < 6) {
-      setError('Le mot de passe doit contenir au moins 6 caractères.');
+    if (password.length < 8) {
+      setError('Le mot de passe doit contenir au moins 8 caractères.');
       return;
     }
 
     setLoading(true);
 
     try {
-      const { error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-            company_name: companyName,
-          },
-        },
-      });
-
-      if (signUpError) {
-        setError(signUpError.message);
+      const slug = slugify(companyName);
+      if (!slug) {
+        setError('Le nom d\'entreprise est invalide.');
+        setLoading(false);
         return;
       }
 
-      setSuccess(true);
+      // Call backend API which creates tenant + user + session
+      const { data, error: apiError } = await apiPost<{
+        user: any;
+        tenant: any;
+        session: { access_token: string; refresh_token: string; expires_at: number };
+      }>('/auth/register', {
+        email,
+        password,
+        full_name: fullName,
+        tenant_name: companyName,
+        tenant_slug: slug,
+        phone: phone || undefined,
+      });
+
+      if (apiError || !data) {
+        setError(apiError || 'Erreur lors de la création du compte.');
+        return;
+      }
+
+      // Set Supabase session with tokens from backend
+      await supabase.auth.setSession({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+      });
+
+      // Redirect to dashboard
+      router.push('/dashboard');
     } catch {
       setError('Une erreur inattendue est survenue. Veuillez réessayer.');
     } finally {
       setLoading(false);
     }
-  }
-
-  if (success) {
-    return (
-      <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-        <div className="mb-4">
-          <div className="mx-auto w-12 h-12 rounded-full bg-accent-emerald/10 flex items-center justify-center">
-            <svg className="w-6 h-6 text-accent-emerald" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-        </div>
-        <h2 className="text-xl font-bold text-surface-900 mb-2">Compte créé avec succès</h2>
-        <p className="text-surface-500 mb-6">
-          Vérifiez votre email pour confirmer votre compte.
-        </p>
-        <Link
-          href="/login"
-          className="inline-block rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-medium py-2.5 px-6 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
-        >
-          Retour à la connexion
-        </Link>
-      </div>
-    );
   }
 
   return (
@@ -169,6 +175,25 @@ export default function RegisterPage() {
             value={companyName}
             onChange={(e) => setCompanyName(e.target.value)}
             placeholder="Ma Société SAS"
+            className="w-full rounded-lg border border-surface-200 bg-white px-4 py-2.5 text-surface-900 placeholder:text-surface-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-shadow"
+          />
+          {companyName && (
+            <p className="mt-1 text-xs text-surface-400">
+              URL : votre-crm.vision/{slugify(companyName)}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label htmlFor="phone" className="block text-sm font-medium text-surface-700 mb-1.5">
+            Téléphone <span className="text-surface-400">(optionnel)</span>
+          </label>
+          <input
+            id="phone"
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="+33 6 12 34 56 78"
             className="w-full rounded-lg border border-surface-200 bg-white px-4 py-2.5 text-surface-900 placeholder:text-surface-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-shadow"
           />
         </div>
