@@ -5,6 +5,22 @@ Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
 ---
 
+## [1.7.0] — 2026-02-20
+
+### Description
+Page d'activité globale (audit logs timeline) avec filtres et navigation.
+
+### Ajouté
+- **Page Activité** (`/activity`) — Timeline globale des actions CRM (créations, modifications, suppressions), groupée par jour, avec filtres par type de ressource (contacts/deals/documents), icônes par action, liens de navigation
+- **Navigation Activité** — Ajout dans la sidebar entre Calendrier et Analytiques
+
+### Stats
+- **18 pages** Next.js (build OK)
+- **12 pages** connectées à l'API réelle
+- **32 tests** backend passants
+
+---
+
 ## [1.6.0] — 2026-02-20
 
 ### Description
