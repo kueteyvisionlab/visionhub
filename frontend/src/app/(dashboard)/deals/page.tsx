@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { apiGet } from '@/lib/api';
+import { apiGet, apiPost } from '@/lib/api';
+import { Modal, Button } from '@/components/ui';
 
 interface Deal {
   id: number;
@@ -42,6 +43,15 @@ interface PipelineColumn {
   deals: Deal[];
   color: string;
   headerBg: string;
+}
+
+interface Contact {
+  id: number;
+  type: 'particulier' | 'entreprise';
+  first_name: string;
+  last_name: string;
+  company_name: string | null;
+  email: string;
 }
 
 function ScoreBadge({ score }: { score: string }) {
@@ -145,6 +155,19 @@ export default function DealsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [columns, setColumns] = useState<PipelineColumn[]>([]);
+  const [pipeline, setPipeline] = useState<Pipeline | null>(null);
+  const [showNewDeal, setShowNewDeal] = useState(false);
+  const [formLoading, setFormLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [formData, setFormData] = useState({
+    name: '',
+    contact_id: '',
+    stage_id: '',
+    amount: '',
+    expected_close_date: '',
+  });
 
   useEffect(() => {
     async function fetchData() {
@@ -168,16 +191,18 @@ export default function DealsPage() {
 
         // 2. Fetch the first pipeline with stages
         const firstPipelineId = pipelines[0].id;
-        const { data: pipeline, error: pipelineError } = await apiGet<Pipeline>(
+        const { data: pipelineData, error: pipelineError } = await apiGet<Pipeline>(
           `/pipelines/${firstPipelineId}`,
           session.access_token
         );
 
-        if (pipelineError || !pipeline || !pipeline.stages) {
+        if (pipelineError || !pipelineData || !pipelineData.stages) {
           setError(pipelineError || 'Impossible de charger le pipeline');
           setLoading(false);
           return;
         }
+
+        setPipeline(pipelineData);
 
         // 3. Fetch all deals for this pipeline
         const { data: dealsResponse, error: dealsError } = await apiGet<{ data: Deal[]; pagination?: any }>(
@@ -203,7 +228,7 @@ export default function DealsPage() {
         }, {} as Record<number, Deal[]>);
 
         // 5. Build columns
-        const sortedStages = [...pipeline.stages].sort((a, b) => a.position - b.position);
+        const sortedStages = [...pipelineData.stages].sort((a, b) => a.position - b.position);
         const newColumns: PipelineColumn[] = sortedStages.map((stage) => {
           const { color, headerBg } = getColumnColors(stage.position);
           return {
@@ -224,6 +249,99 @@ export default function DealsPage() {
 
     fetchData();
   }, [session?.access_token]);
+
+  // Fetch contacts when modal opens
+  useEffect(() => {
+    async function fetchContacts() {
+      if (!showNewDeal || !session?.access_token) return;
+
+      try {
+        const { data: contactsResponse, error: contactsError } = await apiGet<{ data: Contact[] }>(
+          '/contacts?limit=100',
+          session.access_token
+        );
+
+        if (contactsError) {
+          console.error('Error fetching contacts:', contactsError);
+          return;
+        }
+
+        setContacts(contactsResponse?.data || []);
+      } catch (err) {
+        console.error('Error fetching contacts:', err);
+      }
+    }
+
+    fetchContacts();
+  }, [showNewDeal, session?.access_token]);
+
+  function handleFormChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!session?.access_token || !pipeline) return;
+
+    setFormLoading(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      // Prepare payload for API
+      const payload = {
+        name: formData.name,
+        pipeline_id: pipeline.id,
+        stage_id: parseInt(formData.stage_id),
+        contact_id: formData.contact_id ? parseInt(formData.contact_id) : null,
+        amount: parseFloat(formData.amount),
+        expected_close_date: formData.expected_close_date || null,
+      };
+
+      const { error } = await apiPost('/deals', payload, session.access_token);
+
+      if (error) {
+        setErrorMessage(error);
+        setFormLoading(false);
+        return;
+      }
+
+      setSuccessMessage('Deal créé avec succès');
+
+      // Refresh the page data after a short delay
+      setTimeout(() => {
+        setShowNewDeal(false);
+        setFormData({
+          name: '',
+          contact_id: '',
+          stage_id: '',
+          amount: '',
+          expected_close_date: '',
+        });
+        setSuccessMessage('');
+        setErrorMessage('');
+        // Reload the page to refresh deals
+        router.refresh();
+        window.location.reload();
+      }, 1500);
+    } catch (err: any) {
+      console.error('Error creating deal:', err);
+      setErrorMessage(err.message || 'Une erreur est survenue');
+      setFormLoading(false);
+    }
+  }
+
+  function getContactDisplayName(contact: Contact): string {
+    if (contact.type === 'entreprise' && contact.company_name) {
+      return contact.company_name;
+    }
+    return `${contact.first_name} ${contact.last_name}`;
+  }
+
+  const inputClasses =
+    'w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-surface-900 placeholder:text-surface-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent';
+  const labelClasses = 'block text-sm font-medium text-surface-700 mb-1';
 
   if (loading) {
     return <LoadingSkeleton />;
@@ -247,7 +365,10 @@ export default function DealsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-surface-900">Pipeline</h1>
-        <button className="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
+        <button
+          onClick={() => setShowNewDeal(true)}
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors"
+        >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
           </svg>
@@ -314,6 +435,117 @@ export default function DealsPage() {
           </div>
         ))}
       </div>
+
+      {/* New Deal Modal */}
+      <Modal open={showNewDeal} onClose={() => setShowNewDeal(false)} title="Nouveau deal" size="lg">
+        {successMessage ? (
+          <div className="flex items-center gap-3 rounded-lg bg-accent-emerald/10 px-4 py-3 text-sm font-medium text-accent-emerald">
+            <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {successMessage}
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {errorMessage && (
+              <div className="flex items-center gap-3 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-800">
+                <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+                {errorMessage}
+              </div>
+            )}
+
+            <div>
+              <label htmlFor="name" className={labelClasses}>Nom du deal</label>
+              <input
+                id="name"
+                name="name"
+                type="text"
+                required
+                value={formData.name}
+                onChange={handleFormChange}
+                placeholder="Ex: Vente projet CRM"
+                className={inputClasses}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="contact_id" className={labelClasses}>Contact</label>
+              <select
+                id="contact_id"
+                name="contact_id"
+                value={formData.contact_id}
+                onChange={handleFormChange}
+                className={inputClasses}
+              >
+                <option value="">Sélectionner un contact (optionnel)</option>
+                {contacts.map((contact) => (
+                  <option key={contact.id} value={contact.id}>
+                    {getContactDisplayName(contact)} - {contact.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="stage_id" className={labelClasses}>Étape</label>
+              <select
+                id="stage_id"
+                name="stage_id"
+                required
+                value={formData.stage_id}
+                onChange={handleFormChange}
+                className={inputClasses}
+              >
+                <option value="">Sélectionner une étape</option>
+                {pipeline?.stages?.map((stage) => (
+                  <option key={stage.id} value={stage.id}>
+                    {stage.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="amount" className={labelClasses}>Montant (€)</label>
+              <input
+                id="amount"
+                name="amount"
+                type="number"
+                required
+                min="0"
+                step="0.01"
+                value={formData.amount}
+                onChange={handleFormChange}
+                placeholder="Ex: 5000"
+                className={inputClasses}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="expected_close_date" className={labelClasses}>Date de clôture prévue</label>
+              <input
+                id="expected_close_date"
+                name="expected_close_date"
+                type="date"
+                value={formData.expected_close_date}
+                onChange={handleFormChange}
+                className={inputClasses}
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <Button variant="outline" onClick={() => setShowNewDeal(false)}>
+                Annuler
+              </Button>
+              <Button type="submit" loading={formLoading}>
+                Créer le deal
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }

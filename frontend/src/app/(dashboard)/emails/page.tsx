@@ -1,7 +1,12 @@
 // =============================================================================
 // Email Marketing Dashboard — Vision CRM
-// Server Component | Next.js 14 | Tailwind CSS
+// Client Component | Next.js 14 | Tailwind CSS | API-Connected
 // =============================================================================
+
+"use client";
+
+import { useEffect, useState } from "react";
+import { apiGet } from "@/lib/api";
 
 /* -------------------------------------------------------------------------- */
 /*  Types                                                                     */
@@ -9,7 +14,7 @@
 
 interface Campaign {
   nom: string;
-  statut: "envoyee" | "programmee" | "active";
+  statut: "envoyee" | "programmee" | "active" | "en_cours" | "en_pause" | "brouillon";
   statutLabel: string;
   destinataires: string;
   ouvertures: string;
@@ -25,13 +30,37 @@ interface Template {
   gradientTo: string;
 }
 
+interface APICampaign {
+  id: number;
+  name: string;
+  status: "draft" | "scheduled" | "sending" | "sent" | "paused";
+  template_id?: number;
+  scheduled_at?: string;
+  sent_at?: string;
+  stats?: {
+    total_recipients?: number;
+    opens?: number;
+    clicks?: number;
+    unsubscribes?: number;
+  };
+}
+
+interface APITemplate {
+  id: number;
+  name: string;
+  subject?: string;
+  type?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 /* -------------------------------------------------------------------------- */
-/*  Data                                                                      */
+/*  Fallback Demo Data                                                        */
 /* -------------------------------------------------------------------------- */
 
-const stats = [
+const DEMO_STATS = [
   {
-    label: "Emails envoy\u00e9s",
+    label: "Emails envoyés",
     value: "8 420",
     change: "+18% ce mois",
     positive: true,
@@ -42,7 +71,7 @@ const stats = [
     ),
   },
   {
-    label: "Taux d\u2019ouverture",
+    label: "Taux d'ouverture",
     value: "32.5%",
     change: "+2.1 pts",
     positive: true,
@@ -64,7 +93,7 @@ const stats = [
     ),
   },
   {
-    label: "D\u00e9sabonnements",
+    label: "Désabonnements",
     value: "12",
     change: "-25%",
     positive: true,
@@ -76,20 +105,20 @@ const stats = [
   },
 ];
 
-const campaigns: Campaign[] = [
+const DEMO_CAMPAIGNS: Campaign[] = [
   {
-    nom: "Offre de rentr\u00e9e 2026",
+    nom: "Offre de rentrée 2026",
     statut: "envoyee",
-    statutLabel: "Envoy\u00e9e",
+    statutLabel: "Envoyée",
     destinataires: "2 450",
     ouvertures: "34%",
     clics: "5.2%",
     date: "15/02/2026",
   },
   {
-    nom: "Newsletter F\u00e9vrier",
+    nom: "Newsletter Février",
     statut: "envoyee",
-    statutLabel: "Envoy\u00e9e",
+    statutLabel: "Envoyée",
     destinataires: "1 890",
     ouvertures: "28%",
     clics: "3.8%",
@@ -98,7 +127,7 @@ const campaigns: Campaign[] = [
   {
     nom: "Promotion Saint-Valentin",
     statut: "envoyee",
-    statutLabel: "Envoy\u00e9e",
+    statutLabel: "Envoyée",
     destinataires: "2 100",
     ouvertures: "42%",
     clics: "8.1%",
@@ -107,16 +136,16 @@ const campaigns: Campaign[] = [
   {
     nom: "Relance devis en attente",
     statut: "programmee",
-    statutLabel: "Programm\u00e9e",
+    statutLabel: "Programmée",
     destinataires: "340",
-    ouvertures: "\u2014",
-    clics: "\u2014",
+    ouvertures: "—",
+    clics: "—",
     date: "20/02/2026",
   },
   {
     nom: "Bienvenue nouveaux clients",
     statut: "active",
-    statutLabel: "Active (s\u00e9quence)",
+    statutLabel: "Active (séquence)",
     destinataires: "156",
     ouvertures: "45%",
     clics: "6.2%",
@@ -125,7 +154,7 @@ const campaigns: Campaign[] = [
   {
     nom: "Anniversaire client",
     statut: "active",
-    statutLabel: "Active (s\u00e9quence)",
+    statutLabel: "Active (séquence)",
     destinataires: "89",
     ouvertures: "52%",
     clics: "7.8%",
@@ -133,9 +162,9 @@ const campaigns: Campaign[] = [
   },
 ];
 
-const templates: Template[] = [
+const DEMO_TEMPLATES: Template[] = [
   {
-    nom: "Promotion g\u00e9n\u00e9rale",
+    nom: "Promotion générale",
     type: "Promotion",
     modifie: "14/02/2026",
     gradientFrom: "from-[#3269ff]",
@@ -176,7 +205,85 @@ function statutBadgeClasses(statut: Campaign["statut"]): string {
       return "bg-amber-50 text-amber-700 ring-amber-600/20";
     case "active":
       return "bg-[#3269ff]/10 text-[#3269ff] ring-[#3269ff]/20";
+    case "en_cours":
+      return "bg-blue-50 text-blue-700 ring-blue-600/20";
+    case "en_pause":
+      return "bg-gray-50 text-gray-700 ring-gray-600/20";
+    case "brouillon":
+      return "bg-slate-50 text-slate-700 ring-slate-600/20";
   }
+}
+
+function mapAPIStatusToLocal(
+  apiStatus: APICampaign["status"]
+): { statut: Campaign["statut"]; statutLabel: string } {
+  switch (apiStatus) {
+    case "draft":
+      return { statut: "brouillon", statutLabel: "Brouillon" };
+    case "scheduled":
+      return { statut: "programmee", statutLabel: "Programmée" };
+    case "sending":
+      return { statut: "en_cours", statutLabel: "En cours" };
+    case "sent":
+      return { statut: "envoyee", statutLabel: "Envoyée" };
+    case "paused":
+      return { statut: "en_pause", statutLabel: "En pause" };
+  }
+}
+
+function formatDate(dateString?: string): string {
+  if (!dateString) return "—";
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  } catch {
+    return "—";
+  }
+}
+
+function formatPercentage(numerator?: number, denominator?: number): string {
+  if (!numerator || !denominator || denominator === 0) return "—";
+  const percentage = (numerator / denominator) * 100;
+  return `${percentage.toFixed(1)}%`;
+}
+
+function mapAPICampaignToLocal(apiCampaign: APICampaign): Campaign {
+  const { statut, statutLabel } = mapAPIStatusToLocal(apiCampaign.status);
+  const totalRecipients = apiCampaign.stats?.total_recipients || 0;
+  const opens = apiCampaign.stats?.opens || 0;
+  const clicks = apiCampaign.stats?.clicks || 0;
+
+  return {
+    nom: apiCampaign.name,
+    statut,
+    statutLabel,
+    destinataires: totalRecipients > 0 ? totalRecipients.toLocaleString("fr-FR") : "—",
+    ouvertures: formatPercentage(opens, totalRecipients),
+    clics: formatPercentage(clicks, totalRecipients),
+    date: formatDate(apiCampaign.sent_at || apiCampaign.scheduled_at),
+  };
+}
+
+function mapAPITemplateToLocal(apiTemplate: APITemplate, index: number): Template {
+  const gradients = [
+    { from: "from-[#3269ff]", to: "to-[#8b5cf6]" },
+    { from: "from-[#10b981]", to: "to-[#3269ff]" },
+    { from: "from-[#f59e0b]", to: "to-[#f43f5e]" },
+    { from: "from-[#8b5cf6]", to: "to-[#f43f5e]" },
+  ];
+  const gradient = gradients[index % gradients.length];
+
+  return {
+    nom: apiTemplate.name,
+    type: apiTemplate.type || "Email",
+    modifie: formatDate(apiTemplate.updated_at || apiTemplate.created_at),
+    gradientFrom: gradient.from,
+    gradientTo: gradient.to,
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -184,6 +291,51 @@ function statutBadgeClasses(statut: Campaign["statut"]): string {
 /* -------------------------------------------------------------------------- */
 
 export default function EmailMarketingPage() {
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchData() {
+      setLoading(true);
+
+      try {
+        // Fetch campaigns and templates in parallel
+        const [campaignsResponse, templatesResponse] = await Promise.all([
+          apiGet<APICampaign[]>("/email/campaigns"),
+          apiGet<APITemplate[]>("/email/templates"),
+        ]);
+
+        // Process campaigns
+        if (campaignsResponse.data && campaignsResponse.data.length > 0) {
+          const mappedCampaigns = campaignsResponse.data.map(mapAPICampaignToLocal);
+          setCampaigns(mappedCampaigns);
+        } else {
+          // Fallback to demo data if no campaigns returned
+          setCampaigns(DEMO_CAMPAIGNS);
+        }
+
+        // Process templates
+        if (templatesResponse.data && templatesResponse.data.length > 0) {
+          const mappedTemplates = templatesResponse.data.map(mapAPITemplateToLocal);
+          setTemplates(mappedTemplates);
+        } else {
+          // Fallback to demo data if no templates returned
+          setTemplates(DEMO_TEMPLATES);
+        }
+      } catch (error) {
+        // On any error, use demo data
+        console.error("Error fetching email data:", error);
+        setCampaigns(DEMO_CAMPAIGNS);
+        setTemplates(DEMO_TEMPLATES);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchData();
+  }, []);
+
   return (
     <div className="space-y-8">
       {/* ------------------------------------------------------------------ */}
@@ -195,7 +347,7 @@ export default function EmailMarketingPage() {
             Email Marketing
           </h1>
           <p className="mt-1 text-sm text-surface-500">
-            G\u00e9rez vos campagnes, templates et s\u00e9quences automatiques.
+            Gérez vos campagnes, templates et séquences automatiques.
           </p>
         </div>
 
@@ -225,7 +377,7 @@ export default function EmailMarketingPage() {
       {/*  Stats Row                                                         */}
       {/* ------------------------------------------------------------------ */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
+        {DEMO_STATS.map((stat) => (
           <div
             key={stat.label}
             className="rounded-xl border border-surface-200 bg-white p-5 shadow-sm"
@@ -277,56 +429,73 @@ export default function EmailMarketingPage() {
       {/* ------------------------------------------------------------------ */}
       <div className="overflow-hidden rounded-xl border border-surface-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-surface-200">
-            <thead className="bg-surface-50">
-              <tr>
-                {["Nom", "Statut", "Destinataires", "Ouvertures", "Clics", "Date"].map(
-                  (col) => (
-                    <th
-                      key={col}
-                      scope="col"
-                      className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-surface-500"
-                    >
-                      {col}
-                    </th>
-                  )
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-100">
-              {campaigns.map((c) => (
-                <tr
-                  key={c.nom}
-                  className="transition hover:bg-surface-50/60"
-                >
-                  <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-surface-900">
-                    {c.nom}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${statutBadgeClasses(
-                        c.statut
-                      )}`}
-                    >
-                      {c.statutLabel}
-                    </span>
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm text-surface-600">
-                    {c.destinataires}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm text-surface-600">
-                    {c.ouvertures}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm text-surface-600">
-                    {c.clics}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm text-surface-500">
-                    {c.date}
-                  </td>
+          {loading ? (
+            // Loading skeleton
+            <div className="p-8">
+              <div className="space-y-3">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="flex gap-4">
+                    <div className="h-4 w-1/4 animate-pulse rounded bg-surface-200"></div>
+                    <div className="h-4 w-1/6 animate-pulse rounded bg-surface-200"></div>
+                    <div className="h-4 w-1/6 animate-pulse rounded bg-surface-200"></div>
+                    <div className="h-4 w-1/6 animate-pulse rounded bg-surface-200"></div>
+                    <div className="h-4 w-1/6 animate-pulse rounded bg-surface-200"></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <table className="min-w-full divide-y divide-surface-200">
+              <thead className="bg-surface-50">
+                <tr>
+                  {["Nom", "Statut", "Destinataires", "Ouvertures", "Clics", "Date"].map(
+                    (col) => (
+                      <th
+                        key={col}
+                        scope="col"
+                        className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-surface-500"
+                      >
+                        {col}
+                      </th>
+                    )
+                  )}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-surface-100">
+                {campaigns.map((c, index) => (
+                  <tr
+                    key={`${c.nom}-${index}`}
+                    className="transition hover:bg-surface-50/60"
+                  >
+                    <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-surface-900">
+                      {c.nom}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${statutBadgeClasses(
+                          c.statut
+                        )}`}
+                      >
+                        {c.statutLabel}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-surface-600">
+                      {c.destinataires}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-surface-600">
+                      {c.ouvertures}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-surface-600">
+                      {c.clics}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-surface-500">
+                      {c.date}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
@@ -337,48 +506,66 @@ export default function EmailMarketingPage() {
         <h2 className="mb-4 text-lg font-semibold text-surface-900">
           Templates
         </h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {templates.map((t) => (
-            <div
-              key={t.nom}
-              className="group overflow-hidden rounded-xl border border-surface-200 bg-white shadow-sm transition hover:shadow-md"
-            >
-              {/* Preview placeholder */}
+        {loading ? (
+          // Loading skeleton
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[...Array(4)].map((_, i) => (
               <div
-                className={`h-36 bg-gradient-to-br ${t.gradientFrom} ${t.gradientTo} flex items-center justify-center`}
+                key={i}
+                className="overflow-hidden rounded-xl border border-surface-200 bg-white shadow-sm"
               >
-                <svg
-                  className="h-10 w-10 text-white/60"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.5}
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"
-                  />
-                </svg>
-              </div>
-
-              {/* Card body */}
-              <div className="p-4">
-                <h3 className="text-sm font-semibold text-surface-900">
-                  {t.nom}
-                </h3>
-                <div className="mt-2 flex items-center justify-between">
-                  <span className="inline-flex items-center rounded-full bg-surface-100 px-2.5 py-0.5 text-xs font-medium text-surface-600">
-                    {t.type}
-                  </span>
-                  <span className="text-xs text-surface-400">
-                    Modifi\u00e9 le {t.modifie}
-                  </span>
+                <div className="h-36 animate-pulse bg-surface-200"></div>
+                <div className="p-4">
+                  <div className="h-4 w-3/4 animate-pulse rounded bg-surface-200"></div>
+                  <div className="mt-3 h-3 w-1/2 animate-pulse rounded bg-surface-200"></div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {templates.map((t, index) => (
+              <div
+                key={`${t.nom}-${index}`}
+                className="group overflow-hidden rounded-xl border border-surface-200 bg-white shadow-sm transition hover:shadow-md"
+              >
+                {/* Preview placeholder */}
+                <div
+                  className={`h-36 bg-gradient-to-br ${t.gradientFrom} ${t.gradientTo} flex items-center justify-center`}
+                >
+                  <svg
+                    className="h-10 w-10 text-white/60"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"
+                    />
+                  </svg>
+                </div>
+
+                {/* Card body */}
+                <div className="p-4">
+                  <h3 className="text-sm font-semibold text-surface-900">
+                    {t.nom}
+                  </h3>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="inline-flex items-center rounded-full bg-surface-100 px-2.5 py-0.5 text-xs font-medium text-surface-600">
+                      {t.type}
+                    </span>
+                    <span className="text-xs text-surface-400">
+                      Modifié le {t.modifie}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

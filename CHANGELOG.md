@@ -5,6 +5,29 @@ Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
 ---
 
+## [1.1.0] — 2026-02-20
+
+### Description
+Toutes les pages CRM connectées à l'API. Modals de création pour deals et commandes.
+
+### Ajouté
+- **Modal nouveau deal** (`/deals`) — Formulaire avec sélection contact, stage, montant, date de clôture
+- **Modal nouvelle commande** (`/orders`) — Formulaire avec lignes dynamiques, calcul auto TTC, sélection contact
+
+### Modifié
+- **Email Marketing** (`/emails`) — Connecté à l'API (campagnes + templates), fallback démo
+- **Calendrier** (`/calendar`) — Connecté à l'API (service orders), navigation semaine dynamique, fallback démo
+- **Deals** (`/deals`) — Ajout CRUD complet avec modal création
+- **Orders** (`/orders`) — Ajout CRUD complet avec modal création devis/facture
+
+### Stats
+- **17 pages** Next.js (build OK)
+- **12 pages** connectées à l'API réelle
+- **32 tests** backend passants
+- **0 pages** avec données uniquement hardcodées
+
+---
+
 ## [1.0.0] — 2026-02-20
 
 ### Description
