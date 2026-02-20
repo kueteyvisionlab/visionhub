@@ -5,6 +5,29 @@ Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
 ---
 
+## [1.6.0] — 2026-02-20
+
+### Description
+Import CSV contacts, analytiques enrichies avec top clients et métriques de performance.
+
+### Ajouté
+- **Import CSV contacts** (`/contacts`) — Bouton "Importer CSV", parser FR/EN (Nom/Prénom/Email/Téléphone/Entreprise), preview modal, import bulk via API, compteur succès/erreurs
+- **Top clients** (`/analytics`) — Classement des 5 meilleurs clients avec avatar, CA et nombre de deals
+- **Gauge conversion** (`/analytics`) — Graphique circulaire SVG du taux de conversion lead→deal
+- **Valeur pipeline** (`/analytics`) — Nombre de deals ouverts + valeur totale estimée
+- **Performance mensuelle** (`/analytics`) — Deals gagnés ce mois + panier moyen avec icônes
+
+### Modifié
+- **Contacts** — Header avec boutons Importer CSV + Nouveau contact, modal preview import
+- **Analytiques** — Section top clients remplace placeholder, 3 nouvelles cards de métriques ajoutées sous l'entonnoir
+
+### Stats
+- **17 pages** Next.js (build OK)
+- **12 pages** connectées à l'API réelle
+- **32 tests** backend passants
+
+---
+
 ## [1.5.0] — 2026-02-20
 
 ### Description

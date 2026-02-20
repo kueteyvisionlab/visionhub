@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { Button, Modal } from '@/components/ui';
 import { apiGet, apiPost, apiDelete } from '@/lib/api';
@@ -135,6 +135,86 @@ function exportContactsCsv(contacts: Contact[]) {
   URL.revokeObjectURL(url);
 }
 
+function parseCsvLine(line: string): string[] {
+  const fields: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (inQuotes) {
+      if (char === '"' && line[i + 1] === '"') {
+        current += '"';
+        i++; // skip escaped quote
+      } else if (char === '"') {
+        inQuotes = false;
+      } else {
+        current += char;
+      }
+    } else {
+      if (char === '"') {
+        inQuotes = true;
+      } else if (char === ',') {
+        fields.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+  }
+  fields.push(current.trim());
+  return fields;
+}
+
+function parseCsv(text: string): Record<string, string>[] {
+  const lines = text.split(/\r?\n/).filter((line) => line.trim() !== '');
+  if (lines.length < 2) return [];
+
+  const headers = parseCsvLine(lines[0]);
+
+  // Map column names (French and English) to contact fields
+  const columnMap: Record<string, string> = {
+    'nom': 'last_name',
+    'prénom': 'first_name',
+    'prenom': 'first_name',
+    'email': 'email',
+    'e-mail': 'email',
+    'téléphone': 'phone',
+    'telephone': 'phone',
+    'tel': 'phone',
+    'entreprise': 'company_name',
+    'société': 'company_name',
+    'societe': 'company_name',
+    'type': 'type',
+    // English
+    'first name': 'first_name',
+    'last name': 'last_name',
+    'phone': 'phone',
+    'company': 'company_name',
+  };
+
+  const headerMapping = headers.map((h) => {
+    const normalized = h.toLowerCase().trim();
+    return columnMap[normalized] || normalized;
+  });
+
+  const results: Record<string, string>[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const values = parseCsvLine(lines[i]);
+    const obj: Record<string, string> = {};
+    headerMapping.forEach((field, idx) => {
+      if (values[idx] !== undefined) {
+        obj[field] = values[idx];
+      }
+    });
+    // Only include rows that have at least an email or a last_name
+    if (obj.email || obj.last_name || obj.first_name) {
+      results.push(obj);
+    }
+  }
+  return results;
+}
+
 export default function ContactsPage() {
   const { session } = useAuth();
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -155,6 +235,9 @@ export default function ContactsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importData, setImportData] = useState<Record<string, string>[] | null>(null);
+  const [importing, setImporting] = useState(false);
 
   // Debounce search input
   useEffect(() => {
@@ -375,6 +458,61 @@ export default function ContactsPage() {
     }
   }
 
+  function handleCsvImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const parsed = parseCsv(text);
+      if (parsed.length === 0) {
+        alert('Aucun contact valide trouvé dans le fichier CSV.');
+        return;
+      }
+      setImportData(parsed);
+    };
+    reader.readAsText(file, 'UTF-8');
+
+    // Reset file input so the same file can be re-selected
+    e.target.value = '';
+  }
+
+  async function handleConfirmImport() {
+    if (!importData || !session?.access_token) return;
+
+    setImporting(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const contact of importData) {
+      try {
+        const payload = {
+          type: (contact.type === 'entreprise' ? 'entreprise' : 'particulier') as 'particulier' | 'entreprise',
+          first_name: contact.first_name || '',
+          last_name: contact.last_name || '',
+          company_name: contact.company_name || undefined,
+          email: contact.email || '',
+          phone: contact.phone || undefined,
+        };
+
+        const response = await apiPost('/contacts', payload, session.access_token);
+        if (response.error) {
+          errorCount++;
+        } else {
+          successCount++;
+        }
+      } catch {
+        errorCount++;
+      }
+    }
+
+    setImporting(false);
+    setImportData(null);
+    alert(`${successCount} contact(s) importé(s), ${errorCount} erreur(s)`);
+    fetchContacts();
+  }
+
   const isAllSelected = contacts.length > 0 && selectedIds.size === contacts.length;
 
   const inputClasses =
@@ -389,12 +527,27 @@ export default function ContactsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-surface-900">Contacts</h1>
-        <Button onClick={() => setShowNewContact(true)}>
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          Nouveau contact
-        </Button>
+        <div className="flex items-center gap-2">
+          <input
+            type="file"
+            accept=".csv"
+            ref={fileInputRef}
+            onChange={handleCsvImport}
+            className="hidden"
+          />
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+            </svg>
+            Importer CSV
+          </Button>
+          <Button onClick={() => setShowNewContact(true)}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Nouveau contact
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -723,6 +876,60 @@ export default function ContactsPage() {
               </Button>
             </div>
           </form>
+        )}
+      </Modal>
+
+      {/* CSV Import Preview Modal */}
+      <Modal
+        open={importData !== null}
+        onClose={() => { if (!importing) setImportData(null); }}
+        title="Importer des contacts"
+        size="lg"
+      >
+        {importData && (
+          <div className="space-y-4">
+            <p className="text-sm text-surface-700">
+              Importer <span className="font-semibold">{importData.length}</span> contact(s) ?
+            </p>
+
+            {/* Preview table */}
+            <div className="overflow-x-auto border border-surface-200 rounded-lg">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-surface-200 bg-surface-50">
+                    <th className="text-left px-4 py-2 text-xs font-semibold text-surface-800 uppercase">Nom</th>
+                    <th className="text-left px-4 py-2 text-xs font-semibold text-surface-800 uppercase">Email</th>
+                    <th className="text-left px-4 py-2 text-xs font-semibold text-surface-800 uppercase">Téléphone</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-surface-100">
+                  {importData.slice(0, 3).map((row, idx) => (
+                    <tr key={idx}>
+                      <td className="px-4 py-2 text-surface-900">
+                        {[row.first_name, row.last_name].filter(Boolean).join(' ') || '-'}
+                      </td>
+                      <td className="px-4 py-2 text-surface-800">{row.email || '-'}</td>
+                      <td className="px-4 py-2 text-surface-800">{row.phone || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {importData.length > 3 && (
+              <p className="text-xs text-surface-400">
+                ... et {importData.length - 3} autre(s) contact(s)
+              </p>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <Button variant="outline" onClick={() => setImportData(null)} disabled={importing}>
+                Annuler
+              </Button>
+              <Button onClick={handleConfirmImport} loading={importing}>
+                {importing ? 'Importation...' : 'Importer'}
+              </Button>
+            </div>
+          </div>
         )}
       </Modal>
     </div>
