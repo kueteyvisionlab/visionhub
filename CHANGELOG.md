@@ -5,6 +5,30 @@ Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
 ---
 
+## [1.4.0] — 2026-02-20
+
+### Description
+Fonctionnalités business : graphique revenus, actions groupées contacts, impression devis/factures.
+
+### Ajouté
+- **Graphique revenus** (`/dashboard`) — Bar chart CSS pure (6 mois), données depuis `/analytics/revenue`, tooltip montants
+- **Actions rapides** (`/dashboard`) — 4 boutons raccourcis (Nouveau contact, deal, devis, analytiques)
+- **Sélection bulk contacts** (`/contacts`) — Checkbox par ligne, sélection tout, barre d'actions groupées
+- **Export CSV contacts** — Génère et télécharge un CSV (Nom, Email, Téléphone, Entreprise, Type) des contacts sélectionnés
+- **Suppression bulk contacts** — Suppression groupée avec confirmation, refresh après suppression
+- **Impression devis/factures** (`/orders/[id]`) — Bouton "Imprimer / PDF" avec `window.print()`, styles @media print dédiés (masque sidebar, actions, pleine page A4)
+
+### Modifié
+- **Dashboard** — Affiche le prénom réel, graphique revenus entre KPIs et activité/pipeline
+- **Contacts** — Colonne checkbox, barre bulk actions sticky
+
+### Stats
+- **17 pages** Next.js (build OK)
+- **12 pages** connectées à l'API réelle
+- **32 tests** backend passants
+
+---
+
 ## [1.3.0] — 2026-02-20
 
 ### Description

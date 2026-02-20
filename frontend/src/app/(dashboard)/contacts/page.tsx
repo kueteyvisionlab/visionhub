@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Button, Modal } from '@/components/ui';
-import { apiGet, apiPost } from '@/lib/api';
+import { apiGet, apiPost, apiDelete } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface Contact {
@@ -104,6 +104,37 @@ function getInitials(contact: Contact): string {
   return (firstInitial + lastInitial).toUpperCase() || '?';
 }
 
+function escapeCsvField(value: string): string {
+  if (value.includes(',') || value.includes('"') || value.includes('\n') || value.includes('\r')) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+function exportContactsCsv(contacts: Contact[]) {
+  const headers = ['Nom', 'Email', 'Téléphone', 'Entreprise', 'Type'];
+  const rows = contacts.map((c) => [
+    escapeCsvField(getDisplayName(c)),
+    escapeCsvField(c.email || ''),
+    escapeCsvField(c.phone || ''),
+    escapeCsvField(c.company_name || ''),
+    escapeCsvField(c.type === 'particulier' ? 'Particulier' : 'Entreprise'),
+  ]);
+
+  const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `contacts_export_${today}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 export default function ContactsPage() {
   const { session } = useAuth();
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -122,6 +153,8 @@ export default function ContactsPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // Debounce search input
   useEffect(() => {
@@ -184,6 +217,11 @@ export default function ContactsPage() {
   useEffect(() => {
     fetchContacts();
   }, [fetchContacts]);
+
+  // Clear selection when contacts change (page change, filter, etc.)
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [contacts]);
 
   function handleFormChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
     const { name, value, type } = e.target;
@@ -287,6 +325,58 @@ export default function ContactsPage() {
     return pages;
   }
 
+  // --- Bulk selection handlers ---
+  function toggleSelectAll() {
+    if (selectedIds.size === contacts.length && contacts.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(contacts.map((c) => String(c.id))));
+    }
+  }
+
+  function toggleSelectOne(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  function handleExportCsv() {
+    const selected = contacts.filter((c) => selectedIds.has(String(c.id)));
+    if (selected.length === 0) return;
+    exportContactsCsv(selected);
+  }
+
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return;
+    const confirmed = window.confirm(
+      `Voulez-vous vraiment supprimer ${selectedIds.size} contact(s) ? Cette action est irréversible.`
+    );
+    if (!confirmed) return;
+    if (!session?.access_token) return;
+
+    setBulkDeleting(true);
+    try {
+      const deletePromises = Array.from(selectedIds).map((id) =>
+        apiDelete(`/contacts/${id}`, session.access_token)
+      );
+      await Promise.all(deletePromises);
+      setSelectedIds(new Set());
+      await fetchContacts();
+    } catch (error) {
+      console.error('Error deleting contacts:', error);
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
+  const isAllSelected = contacts.length > 0 && selectedIds.size === contacts.length;
+
   const inputClasses =
     'w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-surface-900 placeholder:text-surface-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent';
   const labelClasses = 'block text-sm font-medium text-surface-700 mb-1';
@@ -332,12 +422,51 @@ export default function ContactsPage() {
         </select>
       </div>
 
+      {/* Bulk Action Bar */}
+      {selectedIds.size > 0 && (
+        <div className="sticky top-0 z-10 bg-brand-50 border border-brand-200 rounded-lg px-4 py-3 flex items-center justify-between mb-4">
+          <span className="text-sm font-medium text-brand-700">
+            {selectedIds.size} contact(s) sélectionné(s)
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportCsv}
+              className="bg-white border border-surface-300 hover:bg-surface-50 text-surface-700 px-3 py-1.5 rounded-lg text-sm"
+            >
+              Exporter CSV
+            </button>
+            <button
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting}
+              className="bg-accent-rose hover:bg-accent-rose/90 text-white px-3 py-1.5 rounded-lg text-sm disabled:opacity-50"
+            >
+              {bulkDeleting ? 'Suppression...' : 'Supprimer'}
+            </button>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="bg-white border border-surface-300 hover:bg-surface-50 text-surface-700 px-3 py-1.5 rounded-lg text-sm"
+            >
+              Tout désélectionner
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="bg-white rounded-lg shadow-sm border border-surface-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-surface-200 bg-surface-50">
+                <th className="px-4 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    onChange={toggleSelectAll}
+                    disabled={contacts.length === 0}
+                    className="w-4 h-4 rounded border-surface-300 text-brand-500 focus:ring-brand-500"
+                  />
+                </th>
                 <th className="text-left text-xs font-semibold text-surface-800 uppercase tracking-wider px-6 py-3">
                   Nom
                 </th>
@@ -361,19 +490,27 @@ export default function ContactsPage() {
             <tbody className="divide-y divide-surface-100">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-sm text-surface-400">
+                  <td colSpan={7} className="px-6 py-12 text-center text-sm text-surface-400">
                     Chargement...
                   </td>
                 </tr>
               ) : contacts.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-sm text-surface-400">
+                  <td colSpan={7} className="px-6 py-12 text-center text-sm text-surface-400">
                     Aucun contact ne correspond à votre recherche.
                   </td>
                 </tr>
               ) : (
                 contacts.map((contact) => (
-                  <tr key={contact.id} className="hover:bg-surface-50 transition-colors">
+                  <tr key={contact.id} className={`hover:bg-surface-50 transition-colors ${selectedIds.has(String(contact.id)) ? 'bg-brand-50/50' : ''}`}>
+                    <td className="px-4 py-4 w-10">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(String(contact.id))}
+                        onChange={() => toggleSelectOne(String(contact.id))}
+                        className="w-4 h-4 rounded border-surface-300 text-brand-500 focus:ring-brand-500"
+                      />
+                    </td>
                     <td className="px-6 py-4">
                       <Link href={`/contacts/${contact.id}`} className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-brand-500/10 text-brand-500 flex items-center justify-center text-xs font-semibold flex-shrink-0">

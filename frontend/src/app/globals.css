@@ -64,3 +64,61 @@
 .animate-slide-up {
   animation: slide-up 0.2s ease-out;
 }
+
+/* Print styles for order/invoice PDF */
+@media print {
+  /* Hide everything except main content */
+  aside,
+  header,
+  nav,
+  .no-print,
+  button,
+  [role="dialog"] {
+    display: none !important;
+  }
+
+  /* Remove layout margins */
+  body {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    background: white !important;
+  }
+
+  /* Remove sidebar margin */
+  .flex-1 {
+    margin-left: 0 !important;
+  }
+
+  /* Ensure document preview fills page */
+  .rounded-xl {
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+
+  /* Hide right sidebar (actions/info) on print */
+  .lg\:col-span-2 {
+    grid-column: 1 / -1 !important;
+  }
+
+  .lg\:col-span-2 ~ div {
+    display: none !important;
+  }
+
+  /* Show back link as hidden */
+  a[href="/orders"] {
+    display: none !important;
+  }
+
+  /* Page settings */
+  @page {
+    margin: 1.5cm;
+    size: A4;
+  }
+}

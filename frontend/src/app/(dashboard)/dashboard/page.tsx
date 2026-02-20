@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiGet } from '@/lib/api';
+import Link from 'next/link';
 
 interface AnalyticsSummary {
   total_contacts: number;
@@ -11,6 +12,11 @@ interface AnalyticsSummary {
   deals_won_this_month: number;
   avg_deal_value: number;
   conversion_rate: number;
+}
+
+interface RevenueDataPoint {
+  month: string;
+  revenue: number;
 }
 
 interface Pipeline {
@@ -41,6 +47,7 @@ export default function DashboardPage() {
   const { user, session } = useAuth();
   const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
+  const [revenueData, setRevenueData] = useState<RevenueDataPoint[]>([]);
   const [pipeline, setPipeline] = useState<Pipeline | null>(null);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +69,15 @@ export default function DashboardPage() {
           session.access_token
         );
         if (!analyticsErr && analyticsData) setAnalytics(analyticsData);
+
+        // Fetch revenue chart data
+        const { data: revenueResponse, error: revenueErr } = await apiGet<{ data: RevenueDataPoint[] }>(
+          '/analytics/revenue',
+          session.access_token
+        );
+        if (!revenueErr && revenueResponse?.data) {
+          setRevenueData(revenueResponse.data.slice(-6));
+        }
 
         // Fetch pipelines
         const { data: pipelinesData, error: pipelinesErr } = await apiGet<Pipeline[]>(
@@ -111,6 +127,12 @@ export default function DashboardPage() {
     day: 'numeric',
   });
 
+  // Greeting name: prefer full_name from user metadata, fallback to email prefix
+  const greetingName =
+    user?.user_metadata?.full_name ||
+    user?.email?.split('@')[0] ||
+    'Admin';
+
   // Helper function to get initials from name
   const getInitials = (name: string) => {
     const parts = name.trim().split(' ');
@@ -150,6 +172,17 @@ export default function DashboardPage() {
     return colors[index % colors.length];
   };
 
+  // Helper to format revenue amounts
+  const formatRevenue = (amount: number) => {
+    if (amount >= 1000000) {
+      return `${(amount / 1000000).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} M€`;
+    }
+    if (amount >= 1000) {
+      return `${(amount / 1000).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 1 })} k€`;
+    }
+    return `${amount.toLocaleString('fr-FR')} €`;
+  };
+
   // Loading skeleton
   if (loading) {
     return (
@@ -157,6 +190,16 @@ export default function DashboardPage() {
         <div>
           <div className="h-8 w-48 bg-surface-100 rounded animate-pulse"></div>
           <div className="h-4 w-64 bg-surface-100 rounded animate-pulse mt-2"></div>
+        </div>
+
+        {/* Quick actions skeleton */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              className="h-16 bg-surface-100 rounded-xl animate-pulse"
+            ></div>
+          ))}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -172,6 +215,9 @@ export default function DashboardPage() {
           ))}
         </div>
 
+        {/* Revenue chart skeleton */}
+        <div className="bg-white rounded-xl shadow-sm border border-surface-200 h-72 animate-pulse"></div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-xl shadow-sm border border-surface-200 h-96"></div>
           <div className="bg-white rounded-xl shadow-sm border border-surface-200 h-96"></div>
@@ -186,7 +232,7 @@ export default function DashboardPage() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-surface-900">
-            Bonjour, {user?.email?.split('@')[0] || 'Admin'}
+            Bonjour, {greetingName}
           </h1>
           <p className="text-sm text-surface-200 mt-1 capitalize">{dateStr}</p>
         </div>
@@ -308,14 +354,75 @@ export default function DashboardPage() {
   // Calculate max count for bar width calculation
   const maxCount = Math.max(...pipelineColumns.map((col) => col.count), 1);
 
+  // Revenue chart calculations
+  const maxRevenue = Math.max(...revenueData.map((d) => d.revenue), 1);
+
+  // Quick action items
+  const quickActions = [
+    {
+      label: 'Nouveau contact',
+      href: '/contacts',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Nouveau deal',
+      href: '/deals',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Nouveau devis',
+      href: '/orders',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Voir analytiques',
+      href: '/analytics',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+        </svg>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-surface-900">
-          Bonjour, {user?.email?.split('@')[0] || 'Admin'}
+          Bonjour, {greetingName}
         </h1>
         <p className="text-sm text-surface-200 mt-1 capitalize">{dateStr}</p>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {quickActions.map((action) => (
+          <Link
+            key={action.label}
+            href={action.href}
+            className="flex items-center gap-3 px-4 py-3 bg-white rounded-xl border border-surface-200 shadow-sm hover:border-brand-500 hover:shadow-md transition-all duration-200 group"
+          >
+            <div className="w-9 h-9 rounded-lg bg-brand-500/10 flex items-center justify-center text-brand-500 group-hover:bg-brand-500 group-hover:text-white transition-colors duration-200">
+              {action.icon}
+            </div>
+            <span className="text-sm font-medium text-surface-900 group-hover:text-brand-500 transition-colors duration-200">
+              {action.label}
+            </span>
+          </Link>
+        ))}
       </div>
 
       {/* KPI Cards */}
@@ -345,6 +452,47 @@ export default function DashboardPage() {
             </p>
           </div>
         ))}
+      </div>
+
+      {/* Revenue Chart */}
+      <div className="bg-white rounded-xl shadow-sm border border-surface-200">
+        <div className="px-6 py-4 border-b border-surface-200">
+          <h2 className="text-lg font-semibold text-surface-900">Revenus mensuels</h2>
+        </div>
+        <div className="p-6">
+          {revenueData.length > 0 ? (
+            <div className="flex items-end gap-4 h-56">
+              {revenueData.map((point) => {
+                const heightPercent = maxRevenue > 0 ? (point.revenue / maxRevenue) * 100 : 0;
+                return (
+                  <div
+                    key={point.month}
+                    className="flex-1 flex flex-col items-center gap-2"
+                  >
+                    <div className="w-full flex items-end justify-center" style={{ height: '200px' }}>
+                      <div
+                        className="w-full max-w-[60px] bg-brand-500 hover:bg-brand-600 rounded-t-md transition-colors duration-200 cursor-pointer relative group"
+                        style={{ height: `${Math.max(heightPercent, 2)}%` }}
+                        title={`${point.month}: ${point.revenue.toLocaleString('fr-FR')} €`}
+                      >
+                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-surface-900 text-white text-xs font-medium px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                          {formatRevenue(point.revenue)}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-xs font-medium text-surface-200 truncate max-w-full">
+                      {point.month}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="py-12 text-center text-surface-200">
+              Aucune donnée de revenus
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Bottom section: Activity + Pipeline */}
