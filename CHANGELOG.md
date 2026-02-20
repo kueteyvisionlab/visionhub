@@ -3,6 +3,20 @@
 Toutes les modifications notables du projet sont documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [2.2.0] — 2026-02-20
+
+### Ajouté — UX & Expérience utilisateur (5 nouvelles pages, 34 au total)
+- **Page Profil** (`/profile`) — Modifier nom, téléphone, poste, bio. Changer mot de passe. Sessions actives
+- **Page Organisation** (`/organization`) — Config tenant : nom, secteur, plan actuel, statistiques d'usage (contacts/deals/factures/users/stockage), toggle 14 modules CRM
+- **Page Aide** (`/help`) — Centre d'aide : FAQ 12 questions en 7 catégories, recherche, raccourcis clavier, liens rapides, contact support
+- **Page Onboarding** (`/onboarding`) — Assistant 5 étapes : bienvenue, choix secteur (9 métiers), taille équipe, objectifs, finalisation avec contact démo
+- **Page 404** — Page d'erreur personnalisée avec logo Vision CRM, liens retour dashboard et aide
+- **Custom not-found.tsx** — Remplace la page 404 Next.js par défaut
+
+### Statistiques
+- 34 pages frontend (33 statiques + 3 dynamiques)
+- Build: 0 erreurs, toutes pages optimisées
+
 ## [2.1.0] — 2026-02-20
 
 ### Ajouté — Modules restants (5 nouvelles pages, 29 au total)
