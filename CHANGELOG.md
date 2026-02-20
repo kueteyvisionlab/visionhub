@@ -5,6 +5,30 @@ Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
 ---
 
+## [1.5.0] — 2026-02-20
+
+### Description
+Drag & drop Kanban, dark mode, et améliorations UX interactives.
+
+### Ajouté
+- **Drag & drop Kanban** (`/deals`) — Glisser-déposer natif HTML5 entre colonnes, mise à jour optimiste, persistance via PATCH `/deals/:id`, retour arrière si erreur
+- **Dark mode** — Toggle clair/sombre dans la topbar, persistance localStorage, détection `prefers-color-scheme`, classes Tailwind `dark:`
+- **ThemeProvider** (`contexts/ThemeContext.tsx`) — Contexte React avec `useTheme()` hook
+- **ThemeToggle** — Bouton soleil/lune dans la topbar du dashboard
+
+### Modifié
+- **Deals Kanban** — Cards draggables, feedback visuel (opacité + ring sur colonne cible), curseur grab
+- **Dashboard layout** — Header et main supportent dark mode (`dark:bg-surface-800`, `dark:bg-surface-900`)
+- **globals.css** — Body dark mode (`dark:bg-surface-900 dark:text-surface-200`)
+- **tailwind.config.ts** — `darkMode: 'class'` activé
+
+### Stats
+- **17 pages** Next.js (build OK)
+- **12 pages** connectées à l'API réelle
+- **32 tests** backend passants
+
+---
+
 ## [1.4.0] — 2026-02-20
 
 ### Description

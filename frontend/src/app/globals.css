@@ -10,7 +10,7 @@
   }
 
   body {
-    @apply bg-white text-surface-800;
+    @apply bg-white text-surface-800 dark:bg-surface-900 dark:text-surface-200;
   }
 
   ::selection {

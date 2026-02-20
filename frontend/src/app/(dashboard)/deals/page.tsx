@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { apiGet, apiPost } from '@/lib/api';
+import { apiGet, apiPost, apiPatch } from '@/lib/api';
 import { Modal, Button } from '@/components/ui';
 
 interface Deal {
@@ -161,6 +161,8 @@ export default function DealsPage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [draggedDeal, setDraggedDeal] = useState<{ dealId: number; sourceStageId: number } | null>(null);
+  const [dragOverStageId, setDragOverStageId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     contact_id: '',
@@ -339,6 +341,80 @@ export default function DealsPage() {
     return `${contact.first_name} ${contact.last_name}`;
   }
 
+  // --- Drag & Drop Handlers ---
+  function handleDragStart(e: React.DragEvent<HTMLDivElement>, deal: Deal) {
+    setDraggedDeal({ dealId: deal.id, sourceStageId: deal.stage_id });
+    e.dataTransfer.setData('text/plain', JSON.stringify({ dealId: deal.id, sourceStageId: deal.stage_id }));
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function handleDragOver(e: React.DragEvent<HTMLDivElement>, stageId: number) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverStageId(stageId);
+  }
+
+  function handleDragLeave() {
+    setDragOverStageId(null);
+  }
+
+  async function handleDrop(e: React.DragEvent<HTMLDivElement>, targetStageId: number) {
+    e.preventDefault();
+    setDragOverStageId(null);
+
+    const raw = e.dataTransfer.getData('text/plain');
+    if (!raw) return;
+
+    const { dealId, sourceStageId } = JSON.parse(raw) as { dealId: number; sourceStageId: number };
+
+    // No-op if dropped on the same column
+    if (sourceStageId === targetStageId) {
+      setDraggedDeal(null);
+      return;
+    }
+
+    // Optimistic update: move deal between columns
+    const previousColumns = columns;
+    setColumns((prev) =>
+      prev.map((col) => {
+        if (col.stage.id === sourceStageId) {
+          return { ...col, deals: col.deals.filter((d) => d.id !== dealId) };
+        }
+        if (col.stage.id === targetStageId) {
+          const movedDeal = previousColumns
+            .find((c) => c.stage.id === sourceStageId)
+            ?.deals.find((d) => d.id === dealId);
+          if (movedDeal) {
+            return { ...col, deals: [...col.deals, { ...movedDeal, stage_id: targetStageId }] };
+          }
+        }
+        return col;
+      })
+    );
+
+    setDraggedDeal(null);
+
+    // Persist to API
+    if (session?.access_token) {
+      const { error: patchError } = await apiPatch(
+        `/deals/${dealId}`,
+        { stage_id: targetStageId },
+        session.access_token
+      );
+
+      if (patchError) {
+        console.error('Failed to update deal stage:', patchError);
+        // Revert on failure
+        setColumns(previousColumns);
+      }
+    }
+  }
+
+  function handleDragEnd() {
+    setDraggedDeal(null);
+    setDragOverStageId(null);
+  }
+
   const inputClasses =
     'w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-surface-900 placeholder:text-surface-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent';
   const labelClasses = 'block text-sm font-medium text-surface-700 mb-1';
@@ -379,7 +455,13 @@ export default function DealsPage() {
       {/* Kanban Board */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         {columns.map((column) => (
-          <div key={column.stage.id} className={`rounded-xl border border-surface-200 bg-surface-50 overflow-hidden border-t-4 ${column.color}`}>
+          <div
+            key={column.stage.id}
+            className={`rounded-xl border border-surface-200 bg-surface-50 overflow-hidden border-t-4 ${column.color} transition-all ${dragOverStageId === column.stage.id ? 'ring-2 ring-brand-400 bg-brand-50/50' : ''}`}
+            onDragOver={(e) => handleDragOver(e, column.stage.id)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, column.stage.id)}
+          >
             {/* Column Header */}
             <div className={`px-4 py-3 ${column.headerBg}`}>
               <div className="flex items-center justify-between">
@@ -405,7 +487,10 @@ export default function DealsPage() {
                 column.deals.map((deal) => (
                   <div
                     key={deal.id}
-                    className="bg-white rounded-lg border border-surface-200 shadow-sm p-4 hover:shadow-md transition-shadow cursor-pointer"
+                    draggable={true}
+                    onDragStart={(e) => handleDragStart(e, deal)}
+                    onDragEnd={handleDragEnd}
+                    className={`bg-white rounded-lg border border-surface-200 shadow-sm p-4 hover:shadow-md transition-shadow cursor-pointer ${draggedDeal?.dealId === deal.id ? 'opacity-50' : ''}`}
                     onClick={() => router.push(`/deals/${deal.id}`)}
                   >
                     <div className="flex items-start justify-between mb-2">
