@@ -3,6 +3,20 @@
 Toutes les modifications notables du projet sont documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [2.0.0] — 2026-02-20
+
+### Ajouté — Modules avancés (6 nouvelles pages, 24 au total)
+- **Page Entités** (`/entities`) — CRUD multi-secteur : véhicules, chambres, patients, biens immobiliers, dossiers juridiques, projets, RDV. Filtres par type, badges colorés, modal création/édition, toggle actif/inactif
+- **Page Formulaires** (`/forms`) — Constructeur de formulaires web pour capturer des leads. Champs configurables (texte, email, phone, textarea, select, checkbox), slugs auto-générés, vue soumissions, copie lien public
+- **Page Rapports** (`/reports`) — Module BI avec 5 rapports prédéfinis (performance commerciale, pipeline, contacts, facturation, équipe). Génération PDF/CSV/Excel, planification automatique (quotidien/hebdo/mensuel), vue détaillée avec KPIs
+- **Page Banque** (`/banking`) — Module financier : comptes bancaires connectés, transactions avec filtres (catégorie, rapprochement, recherche), rapprochement avec factures/devis, KPIs (solde, entrées, sorties, non rapprochées)
+- **Page SMS** (`/sms`) — Marketing SMS complet : campagnes (création, planification, statistiques), templates avec variables dynamiques et compteur segments, conversations bidirectionnelles en temps réel
+- **Page Marketplace** (`/marketplace`) — 14 intégrations tierces (Brevo, Twilio, Stripe, GoCardless, Google Calendar, Slack, Zapier, Make, QuickBooks, Pennylane, Mailchimp, Google Analytics, Notion, HubSpot). Installation/désinstallation, configuration API keys, toggle pause/actif
+
+### Modifié
+- **Sidebar** — 6 nouveaux liens de navigation : Entités, SMS, Formulaires, Banque, Rapports, Marketplace (15 items total)
+- **Statistiques** — 24 pages frontend, 18 routes backend, 50+ endpoints API connectés
+
 ---
 
 ## [1.8.0] — 2026-02-20
