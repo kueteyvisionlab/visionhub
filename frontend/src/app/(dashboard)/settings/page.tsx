@@ -21,6 +21,14 @@ interface Tenant {
   plan: string;
 }
 
+interface TeamMember {
+  id: string;
+  full_name: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+}
+
 const planLabels: Record<string, { label: string; price: string }> = {
   free: { label: 'Free', price: 'Gratuit' },
   starter: { label: 'Starter', price: '49 €/mois' },
@@ -82,6 +90,10 @@ export default function SettingsPage() {
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
+  // Team members
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [activeTab, setActiveTab] = useState<'general' | 'team'>('general');
+
   useEffect(() => {
     if (!session?.access_token) return;
 
@@ -102,6 +114,14 @@ export default function SettingsPage() {
             setTenantName(meData.tenant.name || '');
             setIndustry(meData.tenant.industry || '');
           }
+        }
+        // Fetch team members
+        const { data: usersData } = await apiGet<{ data: TeamMember[] }>(
+          '/users',
+          session!.access_token
+        );
+        if (usersData?.data) {
+          setMembers(usersData.data);
         }
       } catch (err) {
         console.error('Error fetching settings:', err);
@@ -192,7 +212,81 @@ export default function SettingsPage() {
       <h1 className="text-2xl font-bold text-surface-900">Paramètres</h1>
       <p className="mt-1 text-surface-500">Gérez les paramètres de votre compte et de votre entreprise.</p>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-2">
+      {/* Tabs */}
+      <div className="mt-6 flex gap-1 border-b border-surface-200">
+        <button
+          onClick={() => setActiveTab('general')}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'general' ? 'border-brand-500 text-brand-600' : 'border-transparent text-surface-500 hover:text-surface-700'}`}
+        >
+          Général
+        </button>
+        <button
+          onClick={() => setActiveTab('team')}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'team' ? 'border-brand-500 text-brand-600' : 'border-transparent text-surface-500 hover:text-surface-700'}`}
+        >
+          Équipe ({members.length})
+        </button>
+      </div>
+
+      {/* Team tab */}
+      {activeTab === 'team' && (
+        <div className="mt-6">
+          <div className="rounded-xl border border-surface-200 bg-white">
+            <div className="px-6 py-4 border-b border-surface-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-surface-900">Membres de l&apos;équipe</h2>
+                <p className="text-sm text-surface-500">{members.length} membre{members.length > 1 ? 's' : ''}</p>
+              </div>
+              <button className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600">
+                Inviter un membre
+              </button>
+            </div>
+            <div className="divide-y divide-surface-100">
+              {members.length > 0 ? members.map((member) => (
+                <div key={member.id} className="px-6 py-4 flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold text-white ${member.is_active ? 'bg-brand-500' : 'bg-surface-300'}`}>
+                    {(member.full_name || member.email).substring(0, 2).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-surface-900">{member.full_name || 'Sans nom'}</p>
+                    <p className="text-xs text-surface-400">{member.email}</p>
+                  </div>
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                    member.role === 'admin' ? 'bg-brand-50 text-brand-700' :
+                    member.role === 'super_admin' ? 'bg-accent-violet/10 text-accent-violet' :
+                    'bg-surface-100 text-surface-600'
+                  }`}>
+                    {roleLabels[member.role] || member.role}
+                  </span>
+                  <span className={`w-2 h-2 rounded-full ${member.is_active ? 'bg-accent-emerald' : 'bg-surface-300'}`} title={member.is_active ? 'Actif' : 'Inactif'} />
+                </div>
+              )) : (
+                <div className="px-6 py-12 text-center text-surface-400">
+                  <p>Aucun membre trouvé.</p>
+                  <p className="text-xs mt-1">Les membres de votre équipe apparaîtront ici.</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Danger zone */}
+          <div className="mt-6 rounded-xl border border-accent-rose/30 bg-accent-rose/5 p-6">
+            <h2 className="text-lg font-semibold text-accent-rose">Zone dangereuse</h2>
+            <p className="mt-1 text-sm text-surface-500">Actions irréversibles sur votre compte.</p>
+            <div className="mt-4 flex items-center gap-4">
+              <button className="rounded-lg border border-accent-rose/30 px-4 py-2 text-sm font-medium text-accent-rose hover:bg-accent-rose/10 transition-colors">
+                Supprimer toutes les données
+              </button>
+              <button className="rounded-lg border border-accent-rose/30 px-4 py-2 text-sm font-medium text-accent-rose hover:bg-accent-rose/10 transition-colors">
+                Supprimer le compte
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* General tab */}
+      {activeTab === 'general' && <div className="mt-6 grid gap-6 lg:grid-cols-2">
         {/* Profil */}
         <div className="rounded-xl border border-surface-200 bg-white p-6">
           <h2 className="text-lg font-semibold text-surface-900">Profil</h2>
@@ -341,7 +435,7 @@ export default function SettingsPage() {
             {passwordSaving ? 'Modification...' : 'Changer le mot de passe'}
           </button>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

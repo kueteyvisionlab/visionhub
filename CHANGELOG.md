@@ -5,6 +5,26 @@ Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
 ---
 
+## [1.8.0] — 2026-02-20
+
+### Description
+Gestion d'équipe dans les paramètres, navigation par onglets, zone dangereuse.
+
+### Ajouté
+- **Onglet Équipe** (`/settings`) — Liste des membres avec rôle, statut actif/inactif, bouton invitation
+- **Navigation par onglets** — Général / Équipe avec compteur de membres
+- **Zone dangereuse** — Boutons suppression données et suppression compte (avec style warning)
+
+### Modifié
+- **Settings** — Refactoring en 2 onglets (Général + Équipe), fetch `/users` pour la liste des membres
+
+### Stats
+- **18 pages** Next.js (build OK)
+- **12 pages** connectées à l'API réelle
+- **32 tests** backend passants
+
+---
+
 ## [1.7.0] — 2026-02-20
 
 ### Description
