@@ -5,6 +5,39 @@ Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
 ---
 
+## [1.0.0] — 2026-02-20
+
+### Description
+Connexion complète du frontend aux vraies données API. Toutes les pages CRM affichent des données réelles depuis Supabase.
+
+### Modifié
+
+#### Pages connectées à l'API (8 pages)
+- **Dashboard** (`/dashboard`) — KPIs depuis `/analytics/summary`, pipeline dynamique, deals récents
+- **Contacts** (`/contacts`) — CRUD complet, recherche serveur, filtres type, pagination réelle, création via modal
+- **Contacts détail** (`/contacts/[id]`) — Fiche contact API, timeline, suppression
+- **Deals** (`/deals`) — Kanban dynamique depuis `/pipelines` + `/deals`, groupement par stage
+- **Deals détail** (`/deals/[id]`) — Deal API, progression stages, activités, déplacement de stage
+- **Devis & Factures** (`/orders`) — Liste API, filtres type/statut, recherche debounced, pagination
+- **Devis détail** (`/orders/[id]`) — Document API, actions (envoyer/accepter/refuser/payer/dupliquer)
+- **Analytiques** (`/analytics`) — Summary, revenus mensuels, stats pipeline
+
+#### Settings & Auth
+- **Paramètres** (`/settings`) — Profil, entreprise, mot de passe connectés à l'API
+- **Layout dashboard** — Nom utilisateur réel, bouton déconnexion
+
+#### Base de données
+- **Migration SQL** exécutée sur Supabase (~50 tables)
+- **Seed data** injecté (2 tenants, 5 users, 18 contacts, 14 entities, 10 orders, 8 deals)
+
+### Stats
+- 17 pages Next.js (build OK)
+- 32 tests backend passants
+- **0 données hardcodées** dans les pages principales
+- 8 pages connectées à l'API réelle
+
+---
+
 ## [0.9.0] — 2026-02-19
 
 ### Description

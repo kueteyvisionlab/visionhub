@@ -4,7 +4,15 @@ import Sidebar from '@/components/Sidebar';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
-  const { loading } = useAuth();
+  const { user, loading, signOut } = useAuth();
+
+  const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Utilisateur';
+  const userInitials = userName
+    .split(' ')
+    .map((n: string) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
 
   if (loading) {
     return (
@@ -72,12 +80,16 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             {/* User dropdown */}
             <div className="flex items-center gap-3 pl-4 border-l border-surface-200">
               <div className="text-right">
-                <p className="text-sm font-medium text-surface-900">Admin</p>
-                <p className="text-xs text-surface-200">Administrateur</p>
+                <p className="text-sm font-medium text-surface-900">{userName}</p>
+                <p className="text-xs text-surface-200">{user?.email || ''}</p>
               </div>
-              <div className="w-9 h-9 rounded-full bg-brand-500 flex items-center justify-center text-sm font-semibold text-white">
-                AD
-              </div>
+              <button
+                onClick={signOut}
+                title="Déconnexion"
+                className="w-9 h-9 rounded-full bg-brand-500 flex items-center justify-center text-sm font-semibold text-white hover:bg-brand-600 transition-colors"
+              >
+                {userInitials}
+              </button>
             </div>
           </div>
         </header>

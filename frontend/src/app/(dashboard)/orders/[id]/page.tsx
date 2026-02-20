@@ -1,44 +1,186 @@
-import Link from 'next/link';
+'use client';
 
-const order = {
-  id: 'DEV-2026-042',
-  type: 'Devis',
-  status: 'envoye',
-  client: 'Marie Dupont',
-  company: 'SCI Les Jardins',
-  email: 'marie.dupont@example.com',
-  date: '18/02/2026',
-  validUntil: '18/03/2026',
-  subtotal: 4000,
-  tva: 800,
-  total: 4800,
-  notes: 'Devis valable 30 jours. Acompte de 30% a la commande.',
-  items: [
-    { description: 'Dalles terrasse gres cerame 60x60', qty: 45, unit: 'm2', price: 55, total: 2475 },
-    { description: 'Pose et preparation du sol', qty: 45, unit: 'm2', price: 25, total: 1125 },
-    { description: 'Bordures aluminium', qty: 12, unit: 'ml', price: 18, total: 216 },
-    { description: 'Systeme arrosage automatique', qty: 1, unit: 'forfait', price: 184, total: 184 },
-  ],
-};
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
+import { apiGet, apiPost } from '@/lib/api';
+
+interface OrderItem {
+  description: string;
+  quantity: number;
+  unit_price: number;
+  tax_rate: number;
+  total: number;
+}
+
+interface Order {
+  id: string;
+  number: string;
+  type: 'quote' | 'invoice';
+  status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'paid' | 'overdue';
+  total_ht: number;
+  total_ttc: number;
+  tax_amount: number;
+  discount_amount: number;
+  notes: string;
+  created_at: string;
+  valid_until: string;
+  items: OrderItem[];
+  contact: {
+    first_name: string;
+    last_name: string;
+    company_name: string;
+    email: string;
+  };
+}
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    brouillon: 'bg-surface-100 text-surface-600',
-    envoye: 'bg-brand-50 text-brand-700',
-    accepte: 'bg-emerald-50 text-emerald-700',
-    refuse: 'bg-rose-50 text-rose-700',
-    payee: 'bg-emerald-50 text-emerald-700',
-    'en attente': 'bg-amber-50 text-amber-700',
-    'en retard': 'bg-rose-50 text-rose-700',
+    draft: 'bg-surface-100 text-surface-600',
+    sent: 'bg-brand-50 text-brand-700',
+    accepted: 'bg-emerald-50 text-emerald-700',
+    rejected: 'bg-rose-50 text-rose-700',
+    paid: 'bg-emerald-50 text-emerald-700',
+    overdue: 'bg-rose-50 text-rose-700',
   };
+
+  const labels: Record<string, string> = {
+    draft: 'Brouillon',
+    sent: 'Envoyé',
+    accepted: 'Accepté',
+    rejected: 'Refusé',
+    paid: 'Payée',
+    overdue: 'En retard',
+  };
+
   return (
-    <span className={`rounded-full px-3 py-1 text-sm font-medium capitalize ${styles[status] || styles.brouillon}`}>
-      {status}
+    <span className={`rounded-full px-3 py-1 text-sm font-medium capitalize ${styles[status] || styles.draft}`}>
+      {labels[status] || status}
     </span>
   );
 }
 
-export default function OrderDetailPage() {
+function LoadingSkeleton() {
+  return (
+    <div className="animate-pulse">
+      <div className="mb-6">
+        <div className="h-5 w-32 bg-surface-200 rounded"></div>
+      </div>
+      <div className="flex items-start justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <div className="h-8 w-40 bg-surface-200 rounded"></div>
+          <div className="h-7 w-20 bg-surface-200 rounded-full"></div>
+        </div>
+        <div className="flex gap-3">
+          <div className="h-10 w-32 bg-surface-200 rounded-lg"></div>
+          <div className="h-10 w-24 bg-surface-200 rounded-lg"></div>
+          <div className="h-10 w-40 bg-surface-200 rounded-lg"></div>
+        </div>
+      </div>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <div className="rounded-xl border border-surface-200 bg-white p-8">
+            <div className="h-64 bg-surface-100 rounded"></div>
+          </div>
+        </div>
+        <div className="space-y-6">
+          <div className="rounded-xl border border-surface-200 bg-white p-6">
+            <div className="h-40 bg-surface-100 rounded"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function OrderDetailPage({ params }: { params: { id: string } }) {
+  const router = useRouter();
+  const { session } = useAuth();
+  const [order, setOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchOrder();
+  }, [params.id]);
+
+  async function fetchOrder() {
+    if (!session?.access_token) return;
+
+    setLoading(true);
+    setError(null);
+
+    const { data, error: fetchError } = await apiGet<Order>(
+      `/orders/${params.id}`,
+      session.access_token
+    );
+
+    if (fetchError) {
+      setError(fetchError);
+    } else {
+      setOrder(data);
+    }
+
+    setLoading(false);
+  }
+
+  async function handleAction(action: 'send' | 'accept' | 'reject' | 'pay' | 'duplicate') {
+    if (!session?.access_token || !order) return;
+
+    setActionLoading(action);
+
+    const { data, error: actionError } = await apiPost(
+      `/orders/${params.id}/${action}`,
+      {},
+      session.access_token
+    );
+
+    if (actionError) {
+      alert(`Erreur: ${actionError}`);
+    } else {
+      if (action === 'duplicate' && data) {
+        router.push(`/orders/${data.id}`);
+      } else {
+        await fetchOrder();
+      }
+    }
+
+    setActionLoading(null);
+  }
+
+  const typeLabel = order?.type === 'quote' ? 'Devis' : 'Facture';
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('fr-FR');
+  };
+
+  const formatAmount = (amount: number) => {
+    return amount.toLocaleString('fr-FR') + ' €';
+  };
+
+  if (loading) {
+    return <LoadingSkeleton />;
+  }
+
+  if (error || !order) {
+    return (
+      <div className="rounded-xl border border-rose-200 bg-rose-50 p-6">
+        <p className="text-rose-900 font-medium">Erreur lors du chargement de la commande</p>
+        <p className="text-rose-700 text-sm mt-1">{error || 'Commande non trouvée'}</p>
+        <Link href="/orders" className="inline-block mt-4 text-sm text-rose-600 hover:text-rose-700 underline">
+          Retour aux devis & factures
+        </Link>
+      </div>
+    );
+  }
+
+  const canSend = order.status === 'draft';
+  const canAccept = order.type === 'quote' && order.status === 'sent';
+  const canReject = order.type === 'quote' && order.status === 'sent';
+  const canPay = order.type === 'invoice' && (order.status === 'sent' || order.status === 'overdue');
+
   return (
     <div>
       {/* Header */}
@@ -53,18 +195,19 @@ export default function OrderDetailPage() {
 
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold text-surface-900">{order.id}</h1>
+          <h1 className="text-2xl font-bold text-surface-900">{order.number}</h1>
           <StatusBadge status={order.status} />
         </div>
         <div className="flex gap-3">
           <button className="rounded-lg border border-surface-200 bg-white px-4 py-2 text-sm font-medium text-surface-700 hover:bg-surface-50">
             Telecharger PDF
           </button>
-          <button className="rounded-lg border border-surface-200 bg-white px-4 py-2 text-sm font-medium text-surface-700 hover:bg-surface-50">
-            Dupliquer
-          </button>
-          <button className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600">
-            Convertir en facture
+          <button
+            onClick={() => handleAction('duplicate')}
+            disabled={actionLoading === 'duplicate'}
+            className="rounded-lg border border-surface-200 bg-white px-4 py-2 text-sm font-medium text-surface-700 hover:bg-surface-50 disabled:opacity-50"
+          >
+            {actionLoading === 'duplicate' ? 'Duplication...' : 'Dupliquer'}
           </button>
         </div>
       </div>
@@ -84,18 +227,24 @@ export default function OrderDetailPage() {
                   <p className="text-sm text-surface-500">SIRET : 123 456 789 00012</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-2xl font-bold text-surface-900">{order.type}</p>
-                  <p className="mt-1 text-lg font-semibold text-surface-700">{order.id}</p>
-                  <p className="mt-2 text-sm text-surface-500">Date : {order.date}</p>
-                  <p className="text-sm text-surface-500">Valide jusqu&apos;au : {order.validUntil}</p>
+                  <p className="text-2xl font-bold text-surface-900">{typeLabel}</p>
+                  <p className="mt-1 text-lg font-semibold text-surface-700">{order.number}</p>
+                  <p className="mt-2 text-sm text-surface-500">Date : {formatDate(order.created_at)}</p>
+                  {order.valid_until && (
+                    <p className="text-sm text-surface-500">Valide jusqu&apos;au : {formatDate(order.valid_until)}</p>
+                  )}
                 </div>
               </div>
 
               <div className="mt-8 rounded-lg bg-surface-50 p-4">
                 <p className="text-xs font-semibold uppercase text-surface-400">Client</p>
-                <p className="mt-1 font-semibold text-surface-900">{order.client}</p>
-                <p className="text-sm text-surface-600">{order.company}</p>
-                <p className="text-sm text-surface-500">{order.email}</p>
+                <p className="mt-1 font-semibold text-surface-900">
+                  {order.contact.first_name} {order.contact.last_name}
+                </p>
+                {order.contact.company_name && (
+                  <p className="text-sm text-surface-600">{order.contact.company_name}</p>
+                )}
+                <p className="text-sm text-surface-500">{order.contact.email}</p>
               </div>
             </div>
 
@@ -106,8 +255,8 @@ export default function OrderDetailPage() {
                   <tr className="border-b border-surface-200">
                     <th className="pb-3 text-left text-xs font-semibold uppercase text-surface-500">Description</th>
                     <th className="pb-3 text-right text-xs font-semibold uppercase text-surface-500">Qte</th>
-                    <th className="pb-3 text-right text-xs font-semibold uppercase text-surface-500">Unite</th>
                     <th className="pb-3 text-right text-xs font-semibold uppercase text-surface-500">Prix unit.</th>
+                    <th className="pb-3 text-right text-xs font-semibold uppercase text-surface-500">TVA</th>
                     <th className="pb-3 text-right text-xs font-semibold uppercase text-surface-500">Total HT</th>
                   </tr>
                 </thead>
@@ -115,10 +264,10 @@ export default function OrderDetailPage() {
                   {order.items.map((item, i) => (
                     <tr key={i}>
                       <td className="py-3 text-sm text-surface-900">{item.description}</td>
-                      <td className="py-3 text-right text-sm text-surface-700">{item.qty}</td>
-                      <td className="py-3 text-right text-sm text-surface-500">{item.unit}</td>
-                      <td className="py-3 text-right text-sm text-surface-700">{item.price.toLocaleString('fr-FR')} EUR</td>
-                      <td className="py-3 text-right text-sm font-medium text-surface-900">{item.total.toLocaleString('fr-FR')} EUR</td>
+                      <td className="py-3 text-right text-sm text-surface-700">{item.quantity}</td>
+                      <td className="py-3 text-right text-sm text-surface-700">{formatAmount(item.unit_price)}</td>
+                      <td className="py-3 text-right text-sm text-surface-500">{item.tax_rate}%</td>
+                      <td className="py-3 text-right text-sm font-medium text-surface-900">{formatAmount(item.total)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -129,15 +278,21 @@ export default function OrderDetailPage() {
                 <div className="w-64 space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-surface-500">Sous-total HT</span>
-                    <span className="font-medium text-surface-900">{order.subtotal.toLocaleString('fr-FR')} EUR</span>
+                    <span className="font-medium text-surface-900">{formatAmount(order.total_ht)}</span>
                   </div>
+                  {order.discount_amount > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-surface-500">Remise</span>
+                      <span className="font-medium text-surface-900">-{formatAmount(order.discount_amount)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-sm">
-                    <span className="text-surface-500">TVA (20%)</span>
-                    <span className="font-medium text-surface-900">{order.tva.toLocaleString('fr-FR')} EUR</span>
+                    <span className="text-surface-500">TVA</span>
+                    <span className="font-medium text-surface-900">{formatAmount(order.tax_amount)}</span>
                   </div>
                   <div className="flex justify-between border-t border-surface-200 pt-2">
                     <span className="font-semibold text-surface-900">Total TTC</span>
-                    <span className="text-lg font-bold text-brand-600">{order.total.toLocaleString('fr-FR')} EUR</span>
+                    <span className="text-lg font-bold text-brand-600">{formatAmount(order.total_ttc)}</span>
                   </div>
                 </div>
               </div>
@@ -158,18 +313,42 @@ export default function OrderDetailPage() {
           <div className="rounded-xl border border-surface-200 bg-white p-6">
             <h3 className="text-sm font-semibold text-surface-900">Actions</h3>
             <div className="mt-4 space-y-2">
-              <button className="w-full rounded-lg border border-surface-200 px-4 py-2 text-left text-sm font-medium text-surface-700 hover:bg-surface-50">
-                Envoyer par email
-              </button>
-              <button className="w-full rounded-lg border border-surface-200 px-4 py-2 text-left text-sm font-medium text-surface-700 hover:bg-surface-50">
-                Marquer comme accepte
-              </button>
-              <button className="w-full rounded-lg border border-surface-200 px-4 py-2 text-left text-sm font-medium text-surface-700 hover:bg-surface-50">
-                Convertir en facture
-              </button>
-              <button className="w-full rounded-lg border border-rose-200 px-4 py-2 text-left text-sm font-medium text-rose-600 hover:bg-rose-50">
-                Marquer comme refuse
-              </button>
+              {canSend && (
+                <button
+                  onClick={() => handleAction('send')}
+                  disabled={actionLoading === 'send'}
+                  className="w-full rounded-lg border border-surface-200 px-4 py-2 text-left text-sm font-medium text-surface-700 hover:bg-surface-50 disabled:opacity-50"
+                >
+                  {actionLoading === 'send' ? 'Envoi...' : 'Envoyer par email'}
+                </button>
+              )}
+              {canAccept && (
+                <button
+                  onClick={() => handleAction('accept')}
+                  disabled={actionLoading === 'accept'}
+                  className="w-full rounded-lg border border-surface-200 px-4 py-2 text-left text-sm font-medium text-surface-700 hover:bg-surface-50 disabled:opacity-50"
+                >
+                  {actionLoading === 'accept' ? 'Traitement...' : 'Marquer comme accepté'}
+                </button>
+              )}
+              {canReject && (
+                <button
+                  onClick={() => handleAction('reject')}
+                  disabled={actionLoading === 'reject'}
+                  className="w-full rounded-lg border border-rose-200 px-4 py-2 text-left text-sm font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                >
+                  {actionLoading === 'reject' ? 'Traitement...' : 'Marquer comme refusé'}
+                </button>
+              )}
+              {canPay && (
+                <button
+                  onClick={() => handleAction('pay')}
+                  disabled={actionLoading === 'pay'}
+                  className="w-full rounded-lg border border-surface-200 px-4 py-2 text-left text-sm font-medium text-surface-700 hover:bg-surface-50 disabled:opacity-50"
+                >
+                  {actionLoading === 'pay' ? 'Traitement...' : 'Marquer comme payée'}
+                </button>
+              )}
             </div>
           </div>
 
@@ -178,29 +357,19 @@ export default function OrderDetailPage() {
             <h3 className="text-sm font-semibold text-surface-900">Informations</h3>
             <dl className="mt-4 space-y-3">
               {[
-                ['Type', order.type],
-                ['Statut', order.status],
-                ['Client', order.client],
-                ['Entreprise', order.company],
-                ['Date', order.date],
-                ['Validite', order.validUntil],
-                ['Cree par', 'Admin Vision'],
+                ['Type', typeLabel],
+                ['Statut', order.status === 'draft' ? 'Brouillon' : order.status === 'sent' ? 'Envoyé' : order.status === 'accepted' ? 'Accepté' : order.status === 'rejected' ? 'Refusé' : order.status === 'paid' ? 'Payée' : 'En retard'],
+                ['Client', `${order.contact.first_name} ${order.contact.last_name}`],
+                ...(order.contact.company_name ? [['Entreprise', order.contact.company_name]] : []),
+                ['Date', formatDate(order.created_at)],
+                ...(order.valid_until ? [['Validité', formatDate(order.valid_until)]] : []),
               ].map(([label, value]) => (
                 <div key={label} className="flex justify-between">
                   <dt className="text-sm text-surface-500">{label}</dt>
-                  <dd className="text-sm font-medium capitalize text-surface-900">{value}</dd>
+                  <dd className="text-sm font-medium text-surface-900">{value}</dd>
                 </div>
               ))}
             </dl>
-          </div>
-
-          {/* Deal link */}
-          <div className="rounded-xl border border-surface-200 bg-white p-6">
-            <h3 className="text-sm font-semibold text-surface-900">Deal associe</h3>
-            <Link href="/deals/deal-001" className="mt-3 block rounded-lg border border-surface-100 p-3 hover:bg-surface-50">
-              <p className="text-sm font-medium text-brand-600">Amenagement terrasse</p>
-              <p className="mt-0.5 text-xs text-surface-500">4 800 EUR — Proposition</p>
-            </Link>
           </div>
         </div>
       </div>

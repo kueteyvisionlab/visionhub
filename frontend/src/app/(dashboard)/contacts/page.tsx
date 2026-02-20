@@ -1,99 +1,46 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { Button, Modal } from '@/components/ui';
+import { apiGet, apiPost } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
-const contacts = [
-  {
-    id: 1,
-    nom: 'Marie Lefebvre',
-    email: 'marie.lefebvre@innovatech.fr',
-    telephone: '+33 6 12 34 56 78',
-    entreprise: 'InnovaTech',
-    type: 'Client',
-    score: 'hot',
-    dernierContact: '19 févr. 2026',
-  },
-  {
-    id: 2,
-    nom: 'Pierre Dupont',
-    email: 'p.dupont@batigroupe.fr',
-    telephone: '+33 6 98 76 54 32',
-    entreprise: 'BatiGroupe',
-    type: 'Client',
-    score: 'hot',
-    dernierContact: '18 févr. 2026',
-  },
-  {
-    id: 3,
-    nom: 'Sophie Bernard',
-    email: 'sophie.bernard@digicom.fr',
-    telephone: '+33 7 11 22 33 44',
-    entreprise: 'DigiCom',
-    type: 'Prospect',
-    score: 'warm',
-    dernierContact: '17 févr. 2026',
-  },
-  {
-    id: 4,
-    nom: 'Jean Martin',
-    email: 'jmartin@acmecorp.fr',
-    telephone: '+33 6 55 66 77 88',
-    entreprise: 'AcmeCorp',
-    type: 'Lead',
-    score: 'cold',
-    dernierContact: '15 févr. 2026',
-  },
-  {
-    id: 5,
-    nom: 'Claire Rousseau',
-    email: 'c.rousseau@luxehotels.fr',
-    telephone: '+33 6 44 55 66 77',
-    entreprise: 'LuxeHotels',
-    type: 'Client',
-    score: 'hot',
-    dernierContact: '14 févr. 2026',
-  },
-  {
-    id: 6,
-    nom: 'Thomas Moreau',
-    email: 'thomas.moreau@greenlogistics.fr',
-    telephone: '+33 7 22 33 44 55',
-    entreprise: 'GreenLogistics',
-    type: 'Prospect',
-    score: 'warm',
-    dernierContact: '12 févr. 2026',
-  },
-  {
-    id: 7,
-    nom: 'Isabelle Petit',
-    email: 'isabelle.petit@mediasud.fr',
-    telephone: '+33 6 33 44 55 66',
-    entreprise: 'MediaSud',
-    type: 'Lead',
-    score: 'cold',
-    dernierContact: '10 févr. 2026',
-  },
-  {
-    id: 8,
-    nom: 'Nicolas Garnier',
-    email: 'n.garnier@techvision.fr',
-    telephone: '+33 7 66 77 88 99',
-    entreprise: 'TechVision',
-    type: 'Prospect',
-    score: 'warm',
-    dernierContact: '8 févr. 2026',
-  },
-];
+interface Contact {
+  id: number;
+  type: 'particulier' | 'entreprise';
+  first_name: string;
+  last_name: string;
+  company_name: string | null;
+  email: string;
+  phone: string | null;
+  score: 'hot' | 'warm' | 'cold';
+  last_contact_at: string | null;
+  created_at: string;
+}
+
+interface PaginationData {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+interface ContactsResponse {
+  data: Contact[];
+  pagination: PaginationData;
+}
 
 const emptyForm = {
-  prenom: '',
-  nom: '',
+  type: 'particulier' as 'particulier' | 'entreprise',
+  first_name: '',
+  last_name: '',
+  company_name: '',
   email: '',
-  telephone: '',
-  entreprise: '',
-  type: 'prospect',
-  notes: '',
+  phone: '',
+  preferred_channel: 'email' as 'email' | 'phone' | 'sms',
+  tags: [] as string[],
+  gdpr_consent: false,
 };
 
 function ScoreBadge({ score }: { score: string }) {
@@ -112,10 +59,8 @@ function ScoreBadge({ score }: { score: string }) {
 
 function TypeBadge({ type }: { type: string }) {
   const config: Record<string, string> = {
-    Client: 'bg-brand-100 text-brand-700',
-    Prospect: 'bg-accent-violet/10 text-accent-violet',
-    Lead: 'bg-accent-amber/10 text-accent-amber',
-    Fournisseur: 'bg-accent-emerald/10 text-accent-emerald',
+    Particulier: 'bg-brand-100 text-brand-700',
+    Entreprise: 'bg-accent-violet/10 text-accent-violet',
   };
   return (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config[type] || 'bg-surface-100 text-surface-800'}`}>
@@ -124,60 +69,230 @@ function TypeBadge({ type }: { type: string }) {
   );
 }
 
+function formatDate(dateString: string | null): string {
+  if (!dateString) return 'N/A';
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  } catch {
+    return 'N/A';
+  }
+}
+
+function getDisplayName(contact: Contact): string {
+  if (contact.type === 'entreprise' && contact.company_name) {
+    return contact.company_name;
+  }
+  return `${contact.first_name} ${contact.last_name}`.trim() || 'Sans nom';
+}
+
+function getInitials(contact: Contact): string {
+  if (contact.type === 'entreprise' && contact.company_name) {
+    return contact.company_name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .substring(0, 2)
+      .toUpperCase();
+  }
+  const firstInitial = contact.first_name?.[0] || '';
+  const lastInitial = contact.last_name?.[0] || '';
+  return (firstInitial + lastInitial).toUpperCase() || '?';
+}
+
 export default function ContactsPage() {
+  const { session } = useAuth();
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [pagination, setPagination] = useState<PaginationData>({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 0,
+  });
+  const [loading, setLoading] = useState(true);
   const [showNewContact, setShowNewContact] = useState(false);
   const [formData, setFormData] = useState(emptyForm);
   const [formLoading, setFormLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
 
-  const filteredContacts = useMemo(() => {
-    return contacts.filter((contact) => {
-      // Type filter
-      if (typeFilter !== 'all' && contact.type.toLowerCase() !== typeFilter) {
-        return false;
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setCurrentPage(1); // Reset to first page when search changes
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Fetch contacts
+  const fetchContacts = useCallback(async () => {
+    if (!session?.access_token) return;
+
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: pagination.limit.toString(),
+      });
+
+      if (debouncedSearch.trim()) {
+        params.append('search', debouncedSearch.trim());
       }
-      // Search filter on name, email, company
-      if (search.trim()) {
-        const q = search.toLowerCase();
-        return (
-          contact.nom.toLowerCase().includes(q) ||
-          contact.email.toLowerCase().includes(q) ||
-          (contact.entreprise && contact.entreprise.toLowerCase().includes(q))
-        );
+
+      if (typeFilter !== 'all') {
+        params.append('type', typeFilter);
       }
-      return true;
-    });
-  }, [search, typeFilter]);
+
+      const response = await apiGet<ContactsResponse>(
+        `/contacts?${params.toString()}`,
+        session.access_token
+      );
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      const result = response.data;
+      setContacts(result.data || []);
+      if (result.pagination) {
+        setPagination(result.pagination);
+      }
+    } catch (error) {
+      console.error('Error fetching contacts:', error);
+      setContacts([]);
+      setPagination({
+        page: 1,
+        limit: 20,
+        total: 0,
+        totalPages: 0,
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [session?.access_token, currentPage, debouncedSearch, typeFilter, pagination.limit]);
+
+  // Fetch contacts on mount and when filters change
+  useEffect(() => {
+    fetchContacts();
+  }, [fetchContacts]);
 
   function handleFormChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
-    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value, type } = e.target;
+
+    if (type === 'checkbox') {
+      setFormData((prev) => ({ ...prev, [name]: (e.target as HTMLInputElement).checked }));
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!session?.access_token) return;
+
     setFormLoading(true);
+    try {
+      // Prepare payload for API
+      const payload = {
+        type: formData.type,
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        company_name: formData.company_name || undefined,
+        email: formData.email,
+        phone: formData.phone || undefined,
+        preferred_channel: formData.preferred_channel,
+        tags: formData.tags,
+        gdpr_consent: formData.gdpr_consent,
+      };
 
-    // Simulate API call
-    console.log('Nouveau contact:', formData);
+      await apiPost('/contacts', payload, session.access_token);
 
-    // Simulate network delay
-    await new Promise((resolve) => setTimeout(resolve, 800));
+      setSuccessMessage('Contact créé avec succès');
 
-    setFormLoading(false);
-    setSuccessMessage('Contact cree avec succes');
-
-    setTimeout(() => {
-      setShowNewContact(false);
-      setFormData(emptyForm);
+      // Refresh the contacts list
+      setTimeout(() => {
+        setShowNewContact(false);
+        setFormData(emptyForm);
+        setSuccessMessage('');
+        fetchContacts();
+      }, 1500);
+    } catch (error) {
+      console.error('Error creating contact:', error);
       setSuccessMessage('');
-    }, 1500);
+    } finally {
+      setFormLoading(false);
+    }
+  }
+
+  function handlePreviousPage() {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  }
+
+  function handleNextPage() {
+    if (currentPage < pagination.totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  }
+
+  function handlePageClick(page: number) {
+    setCurrentPage(page);
+  }
+
+  // Generate page numbers to display
+  function getPageNumbers(): (number | 'ellipsis')[] {
+    const pages: (number | 'ellipsis')[] = [];
+    const totalPages = pagination.totalPages;
+    const current = currentPage;
+
+    if (totalPages <= 7) {
+      // Show all pages if 7 or fewer
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Always show first page
+      pages.push(1);
+
+      if (current > 3) {
+        pages.push('ellipsis');
+      }
+
+      // Show pages around current
+      const start = Math.max(2, current - 1);
+      const end = Math.min(totalPages - 1, current + 1);
+
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+
+      if (current < totalPages - 2) {
+        pages.push('ellipsis');
+      }
+
+      // Always show last page
+      pages.push(totalPages);
+    }
+
+    return pages;
   }
 
   const inputClasses =
     'w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-surface-900 placeholder:text-surface-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent';
   const labelClasses = 'block text-sm font-medium text-surface-700 mb-1';
+
+  const startRecord = contacts.length > 0 ? (currentPage - 1) * pagination.limit + 1 : 0;
+  const endRecord = Math.min(currentPage * pagination.limit, pagination.total);
 
   return (
     <div className="space-y-6">
@@ -212,10 +327,8 @@ export default function ContactsPage() {
           className="px-4 py-2 rounded-lg border border-surface-200 bg-white text-sm text-surface-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
         >
           <option value="all">Tous</option>
-          <option value="client">Client</option>
-          <option value="prospect">Prospect</option>
-          <option value="lead">Lead</option>
-          <option value="fournisseur">Fournisseur</option>
+          <option value="particulier">Particulier</option>
+          <option value="entreprise">Entreprise</option>
         </select>
       </div>
 
@@ -232,7 +345,7 @@ export default function ContactsPage() {
                   Email
                 </th>
                 <th className="text-left text-xs font-semibold text-surface-800 uppercase tracking-wider px-6 py-3">
-                  Telephone
+                  Téléphone
                 </th>
                 <th className="text-left text-xs font-semibold text-surface-800 uppercase tracking-wider px-6 py-3">
                   Type
@@ -246,36 +359,44 @@ export default function ContactsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-100">
-              {filteredContacts.map((contact) => (
-                <tr key={contact.id} className="hover:bg-surface-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-brand-500/10 text-brand-500 flex items-center justify-center text-xs font-semibold flex-shrink-0">
-                        {contact.nom
-                          .split(' ')
-                          .map((n) => n[0])
-                          .join('')}
-                      </div>
-                      <span className="text-sm font-medium text-surface-900">{contact.nom}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-surface-800">{contact.email}</td>
-                  <td className="px-6 py-4 text-sm text-surface-800">{contact.telephone}</td>
-                  <td className="px-6 py-4">
-                    <TypeBadge type={contact.type} />
-                  </td>
-                  <td className="px-6 py-4">
-                    <ScoreBadge score={contact.score} />
-                  </td>
-                  <td className="px-6 py-4 text-sm text-surface-800">{contact.dernierContact}</td>
-                </tr>
-              ))}
-              {filteredContacts.length === 0 && (
+              {loading ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center text-sm text-surface-400">
-                    Aucun contact ne correspond a votre recherche.
+                    Chargement...
                   </td>
                 </tr>
+              ) : contacts.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-sm text-surface-400">
+                    Aucun contact ne correspond à votre recherche.
+                  </td>
+                </tr>
+              ) : (
+                contacts.map((contact) => (
+                  <tr key={contact.id} className="hover:bg-surface-50 transition-colors">
+                    <td className="px-6 py-4">
+                      <Link href={`/contacts/${contact.id}`} className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-brand-500/10 text-brand-500 flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                          {getInitials(contact)}
+                        </div>
+                        <span className="text-sm font-medium text-surface-900 hover:text-brand-600">
+                          {getDisplayName(contact)}
+                        </span>
+                      </Link>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-surface-800">{contact.email}</td>
+                    <td className="px-6 py-4 text-sm text-surface-800">{contact.phone || 'N/A'}</td>
+                    <td className="px-6 py-4">
+                      <TypeBadge type={contact.type === 'particulier' ? 'Particulier' : 'Entreprise'} />
+                    </td>
+                    <td className="px-6 py-4">
+                      <ScoreBadge score={contact.score} />
+                    </td>
+                    <td className="px-6 py-4 text-sm text-surface-800">
+                      {formatDate(contact.last_contact_at)}
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
@@ -284,28 +405,46 @@ export default function ContactsPage() {
         {/* Pagination */}
         <div className="px-6 py-4 border-t border-surface-200 flex items-center justify-between">
           <p className="text-sm text-surface-200">
-            Affichage de <span className="font-medium text-surface-900">1</span> a{' '}
-            <span className="font-medium text-surface-900">{filteredContacts.length}</span> sur{' '}
-            <span className="font-medium text-surface-900">1 247</span> contacts
+            Affichage de <span className="font-medium text-surface-900">{startRecord}</span> à{' '}
+            <span className="font-medium text-surface-900">{endRecord}</span> sur{' '}
+            <span className="font-medium text-surface-900">{pagination.total}</span> contacts
           </p>
           <div className="flex items-center gap-2">
-            <button className="px-3 py-1.5 text-sm font-medium text-surface-800 bg-white border border-surface-200 rounded-lg hover:bg-surface-50 transition-colors disabled:opacity-50" disabled>
-              Precedent
+            <button
+              onClick={handlePreviousPage}
+              disabled={currentPage === 1 || loading}
+              className="px-3 py-1.5 text-sm font-medium text-surface-800 bg-white border border-surface-200 rounded-lg hover:bg-surface-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Précédent
             </button>
-            <button className="px-3 py-1.5 text-sm font-medium text-white bg-brand-500 border border-brand-500 rounded-lg">
-              1
-            </button>
-            <button className="px-3 py-1.5 text-sm font-medium text-surface-800 bg-white border border-surface-200 rounded-lg hover:bg-surface-50 transition-colors">
-              2
-            </button>
-            <button className="px-3 py-1.5 text-sm font-medium text-surface-800 bg-white border border-surface-200 rounded-lg hover:bg-surface-50 transition-colors">
-              3
-            </button>
-            <span className="px-2 text-surface-200">...</span>
-            <button className="px-3 py-1.5 text-sm font-medium text-surface-800 bg-white border border-surface-200 rounded-lg hover:bg-surface-50 transition-colors">
-              156
-            </button>
-            <button className="px-3 py-1.5 text-sm font-medium text-surface-800 bg-white border border-surface-200 rounded-lg hover:bg-surface-50 transition-colors">
+            {getPageNumbers().map((pageNum, index) => {
+              if (pageNum === 'ellipsis') {
+                return (
+                  <span key={`ellipsis-${index}`} className="px-2 text-surface-200">
+                    ...
+                  </span>
+                );
+              }
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => handlePageClick(pageNum)}
+                  disabled={loading}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors disabled:cursor-not-allowed ${
+                    pageNum === currentPage
+                      ? 'text-white bg-brand-500 border border-brand-500'
+                      : 'text-surface-800 bg-white border border-surface-200 hover:bg-surface-50'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+            <button
+              onClick={handleNextPage}
+              disabled={currentPage === pagination.totalPages || loading || pagination.totalPages === 0}
+              className="px-3 py-1.5 text-sm font-medium text-surface-800 bg-white border border-surface-200 rounded-lg hover:bg-surface-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               Suivant
             </button>
           </div>
@@ -323,34 +462,63 @@ export default function ContactsPage() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="type" className={labelClasses}>Type de contact</label>
+              <select
+                id="type"
+                name="type"
+                value={formData.type}
+                onChange={handleFormChange}
+                className={inputClasses}
+              >
+                <option value="particulier">Particulier</option>
+                <option value="entreprise">Entreprise</option>
+              </select>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="prenom" className={labelClasses}>Prenom</label>
+                <label htmlFor="first_name" className={labelClasses}>Prénom</label>
                 <input
-                  id="prenom"
-                  name="prenom"
+                  id="first_name"
+                  name="first_name"
                   type="text"
                   required
-                  value={formData.prenom}
+                  value={formData.first_name}
                   onChange={handleFormChange}
                   placeholder="Ex: Marie"
                   className={inputClasses}
                 />
               </div>
               <div>
-                <label htmlFor="nom" className={labelClasses}>Nom</label>
+                <label htmlFor="last_name" className={labelClasses}>Nom</label>
                 <input
-                  id="nom"
-                  name="nom"
+                  id="last_name"
+                  name="last_name"
                   type="text"
                   required
-                  value={formData.nom}
+                  value={formData.last_name}
                   onChange={handleFormChange}
                   placeholder="Ex: Lefebvre"
                   className={inputClasses}
                 />
               </div>
             </div>
+
+            {formData.type === 'entreprise' && (
+              <div>
+                <label htmlFor="company_name" className={labelClasses}>Nom de l'entreprise</label>
+                <input
+                  id="company_name"
+                  name="company_name"
+                  type="text"
+                  value={formData.company_name}
+                  onChange={handleFormChange}
+                  placeholder="Ex: InnovaTech"
+                  className={inputClasses}
+                />
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -367,12 +535,12 @@ export default function ContactsPage() {
                 />
               </div>
               <div>
-                <label htmlFor="telephone" className={labelClasses}>Telephone</label>
+                <label htmlFor="phone" className={labelClasses}>Téléphone</label>
                 <input
-                  id="telephone"
-                  name="telephone"
+                  id="phone"
+                  name="phone"
                   type="tel"
-                  value={formData.telephone}
+                  value={formData.phone}
                   onChange={handleFormChange}
                   placeholder="Ex: +33 6 12 34 56 78"
                   className={inputClasses}
@@ -380,47 +548,33 @@ export default function ContactsPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="entreprise" className={labelClasses}>Entreprise</label>
-                <input
-                  id="entreprise"
-                  name="entreprise"
-                  type="text"
-                  value={formData.entreprise}
-                  onChange={handleFormChange}
-                  placeholder="Ex: InnovaTech"
-                  className={inputClasses}
-                />
-              </div>
-              <div>
-                <label htmlFor="type" className={labelClasses}>Type</label>
-                <select
-                  id="type"
-                  name="type"
-                  value={formData.type}
-                  onChange={handleFormChange}
-                  className={inputClasses}
-                >
-                  <option value="prospect">Prospect</option>
-                  <option value="client">Client</option>
-                  <option value="lead">Lead</option>
-                  <option value="fournisseur">Fournisseur</option>
-                </select>
-              </div>
+            <div>
+              <label htmlFor="preferred_channel" className={labelClasses}>Canal préféré</label>
+              <select
+                id="preferred_channel"
+                name="preferred_channel"
+                value={formData.preferred_channel}
+                onChange={handleFormChange}
+                className={inputClasses}
+              >
+                <option value="email">Email</option>
+                <option value="phone">Téléphone</option>
+                <option value="sms">SMS</option>
+              </select>
             </div>
 
-            <div>
-              <label htmlFor="notes" className={labelClasses}>Notes</label>
-              <textarea
-                id="notes"
-                name="notes"
-                rows={3}
-                value={formData.notes}
+            <div className="flex items-center gap-2">
+              <input
+                id="gdpr_consent"
+                name="gdpr_consent"
+                type="checkbox"
+                checked={formData.gdpr_consent}
                 onChange={handleFormChange}
-                placeholder="Notes supplementaires..."
-                className={inputClasses}
+                className="w-4 h-4 rounded border-surface-200 text-brand-500 focus:ring-2 focus:ring-brand-500"
               />
+              <label htmlFor="gdpr_consent" className="text-sm text-surface-700">
+                Consentement RGPD obtenu
+              </label>
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-2">
@@ -428,7 +582,7 @@ export default function ContactsPage() {
                 Annuler
               </Button>
               <Button type="submit" loading={formLoading}>
-                Creer le contact
+                Créer le contact
               </Button>
             </div>
           </form>
