@@ -3,6 +3,21 @@
 Toutes les modifications notables du projet sont documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [2.1.0] — 2026-02-20
+
+### Ajouté — Modules restants (5 nouvelles pages, 29 au total)
+- **Page Pipelines** (`/pipelines`) — Gestion des pipelines de vente personnalisés. Création/suppression de pipelines, ajout/édition/suppression d'étapes avec couleurs, visualisation du flux avec compteurs de deals
+- **Page Webhooks** (`/webhooks`) — Configuration des webhooks sortants. 10 types d'événements (contact/deal/order/form), activation/désactivation, historique des livraisons avec codes HTTP et temps de réponse, secret HMAC-SHA256
+- **Page Interventions** (`/service-orders`) — Ordres de service et missions terrain. Workflow par statut (en attente → assigné → en cours → terminé), 4 niveaux de priorité, planification, KPIs temps réel
+- **Page Notifications** (`/notifications`) — Centre de notifications complet. 7 types (deals, paiements, contacts, tâches, mentions, système), groupement par date, marquage lu/non-lu, badge compteur, filtres par type
+- **Sidebar** — 4 nouveaux liens : Pipelines, Interventions, Webhooks, Notifications (19 items total)
+
+### Statistiques
+- 29 pages frontend (28 statiques + 3 dynamiques)
+- 18 routes backend toutes connectées
+- 19 items de navigation sidebar
+- 0 API backend non exploitée
+
 ## [2.0.0] — 2026-02-20
 
 ### Ajouté — Modules avancés (6 nouvelles pages, 24 au total)
