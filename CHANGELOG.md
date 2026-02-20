@@ -5,6 +5,35 @@ Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
 ---
 
+## [0.9.0] — 2026-02-19
+
+### Description
+Git init, Docker, et préparation production. Premier commit avec tout le projet.
+
+### Ajouté
+
+#### Docker (5 fichiers)
+- **backend/Dockerfile** — Multi-stage build (deps → build → runner), Node 20 Alpine, user non-root
+- **frontend/Dockerfile** — Multi-stage build avec Next.js standalone output
+- **docker-compose.yml** — Services backend + frontend, healthcheck, dépendances
+- **.dockerignore** — Backend + frontend
+
+#### Production Readiness
+- **frontend/.env.example** — Variables d'environnement documentées
+- **next.config.js** — `output: 'standalone'` pour Docker
+- **Git init** — Premier commit (118 fichiers, 35,837 lignes)
+
+### Stats finales
+- **118 fichiers** committés
+- **35,837 lignes** de code
+- **18 pages** Next.js
+- **18 routes** API
+- **~50 tables** PostgreSQL
+- **32 tests** passants
+- **0 erreurs** TypeScript/build
+
+---
+
 ## [0.8.0] — 2026-02-19
 
 ### Description
